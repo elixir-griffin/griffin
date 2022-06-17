@@ -37,57 +37,58 @@ defmodule GriffinSSGTest do
       assert quoted = EEx.compile_file("test/files/simple-layout.html.eex")
 
       assert quoted ==
-        {:__block__, [],
-        [
-          {:=, [],
-           [
-             {:arg0, [], EEx.Engine},
-             {{:., [], [{:__aliases__, [alias: false], [:String, :Chars]}, :to_string]},
-              [],
-              [
-                {{:., [line: 1],
-                  [
-                    {:__aliases__, [line: 1, alias: false], [:EEx, :Engine]},
-                    :fetch_assign!
-                  ]}, [line: 1],
-                 [
-                   {:var!, [line: 1, context: EEx.Engine, import: Kernel],
-                    [{:assigns, [line: 1], EEx.Engine}]},
-                   :title
-                 ]}
-              ]}
-           ]},
-          {:=, [],
-           [
-             {:arg1, [], EEx.Engine},
-             {{:., [], [{:__aliases__, [alias: false], [:String, :Chars]}, :to_string]},
-              [],
-              [
-                {{:., [line: 1],
-                  [
-                    {:__aliases__, [line: 1, alias: false], [:EEx, :Engine]},
-                    :fetch_assign!
-                  ]}, [line: 1],
-                 [
-                   {:var!, [line: 1, context: EEx.Engine, import: Kernel],
-                    [{:assigns, [line: 1], EEx.Engine}]},
-                   :content
-                 ]}
-              ]}
-           ]},
-          {:<<>>, [],
-           [
-             "<html><title>",
-             {:"::", [], [{:arg0, [], EEx.Engine}, {:binary, [], EEx.Engine}]},
-             "</title><body>",
-             {:"::", [], [{:arg1, [], EEx.Engine}, {:binary, [], EEx.Engine}]},
-             "</body></html>"
-           ]}
-        ]}
+               {:__block__, [],
+                [
+                  {:=, [],
+                   [
+                     {:arg0, [], EEx.Engine},
+                     {{:., [], [{:__aliases__, [alias: false], [:String, :Chars]}, :to_string]},
+                      [],
+                      [
+                        {{:., [line: 1],
+                          [
+                            {:__aliases__, [line: 1, alias: false], [:EEx, :Engine]},
+                            :fetch_assign!
+                          ]}, [line: 1],
+                         [
+                           {:var!, [line: 1, context: EEx.Engine, import: Kernel],
+                            [{:assigns, [line: 1], EEx.Engine}]},
+                           :title
+                         ]}
+                      ]}
+                   ]},
+                  {:=, [],
+                   [
+                     {:arg1, [], EEx.Engine},
+                     {{:., [], [{:__aliases__, [alias: false], [:String, :Chars]}, :to_string]},
+                      [],
+                      [
+                        {{:., [line: 1],
+                          [
+                            {:__aliases__, [line: 1, alias: false], [:EEx, :Engine]},
+                            :fetch_assign!
+                          ]}, [line: 1],
+                         [
+                           {:var!, [line: 1, context: EEx.Engine, import: Kernel],
+                            [{:assigns, [line: 1], EEx.Engine}]},
+                           :content
+                         ]}
+                      ]}
+                   ]},
+                  {:<<>>, [],
+                   [
+                     "<html><title>",
+                     {:"::", [], [{:arg0, [], EEx.Engine}, {:binary, [], EEx.Engine}]},
+                     "</title><body>",
+                     {:"::", [], [{:arg1, [], EEx.Engine}, {:binary, [], EEx.Engine}]},
+                     "</body></html>"
+                   ]}
+                ]}
 
-      assert {eval, _bindings} = Code.eval_quoted(quoted, assigns: [content: "Griffin", title: "test file"])
+      assert {eval, _bindings} =
+               Code.eval_quoted(quoted, assigns: [content: "Griffin", title: "test file"])
+
       assert eval == "<html><title>test file</title><body>Griffin</body></html>"
-
     end
   end
 
@@ -102,7 +103,7 @@ defmodule GriffinSSGTest do
 
       File.mkdir_p!(Path.dirname(tmp_path))
 
-      assert :ok = GriffinSSG.render(tmp_path, layout, [frontmatter: frontmatter, content: content])
+      assert :ok = GriffinSSG.render(tmp_path, layout, frontmatter: frontmatter, content: content)
       assert File.exists?(tmp_path)
 
       assert file = File.read!(tmp_path)

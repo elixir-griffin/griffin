@@ -43,12 +43,22 @@ defmodule GriffinSSG do
   end
 
   @doc """
-  Compiles a template file from disk into quoted code, to be used at render time
+  Compiles a template file from disk into quoted code
+  that can then be used by `GriffinSSG.render/3`.
   """
   def compile_layout(path, _options \\ []) do
     EEx.compile_file(path)
   end
 
+  @doc """
+  Renders a layout to file, taking in a number of options that affect the rendered output.
+
+  The following `options` are accepted:
+
+    * `frontmatter`   - the frontmatter attributes
+    * `content`       - the content to render in the layout
+    * `assigns`       - a map with template variables to be used in the layout
+  """
   def render(path, layout, options) do
     frontmatter = Keyword.fetch!(options, :frontmatter)
     content = Keyword.fetch!(options, :content)
@@ -58,6 +68,18 @@ defmodule GriffinSSG do
       frontmatter
       |> Map.put(:content, content)
       |> Map.merge(assigns)
+      # here we're compiling all existing partials when we might only need a very small subset.
+      # TODO compile only required partials by looking at args in the quoted expression
+      |> then(fn current_assigns ->
+        Map.update!(current_assigns, :partials, fn partials ->
+          partials
+          |> Enum.map(fn partial ->
+            {compiled, _bindings} = Code.eval_quoted(partial, assigns: current_assigns)
+            compiled
+          end)
+          |> Enum.into(%{})
+        end)
+      end)
       |> Enum.to_list()
 
     {result, _bindings} = Code.eval_quoted(layout, assigns: flat_assigns)

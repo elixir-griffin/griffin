@@ -4,32 +4,48 @@ defmodule Grf.New.Generator do
 
   def run(project) do
     for {input, output} <- template_files(project),
+        do: copy_template(input, output, project)
+
+    for {input, output} <- assets(project),
         do: copy_file(input, output, project)
+
+    project
   end
 
   defp template_files(project) do
     [
-      {"/config/config.exs", "config/config.exs"},
-      # {"/config/dev.exs", "config/dev.exs"},
-      # {"/config/prod.exs", "config/prod.exs"},
-      # {"/config/test.exs", "config/test.exs"},
-      {"/lib/app_name.ex", "lib/#{project.app_name}.ex"},
-      {"/priv/content/assets/style.css", "priv/content/assets/style.css"},
-      {"/priv/content/index.md", "priv/content/index.md"},
-      {"/priv/layouts/default.html.eex", "priv/layouts/default.html.eex"},
+      {"/config/config.exs", "/config/config.exs"},
 
-      # {"/formatter.exs", ".formatter.exs"},
-      {"/gitignore", ".gitignore"},
-      {"/mix.exs", "mix.exs"},
-      {"/README.md", "README.md"}
+      {"/lib/app_name.ex", "/lib/#{project.app_name}.ex"},
+      {"/priv/content/index.md", "/priv/content/index.md"},
+      {"/priv/layouts/default.html.eex", "/lib/layouts/default.html.eex"},
+
+      {"/gitignore", "/.gitignore"},
+      {"/mix.exs", "/mix.exs"},
+      {"/README.md", "/README.md"}
     ]
+  end
+
+  defp assets(_project) do
+    [
+      {"/assets/favicon.ico", "/assets/favicon.ico"},
+      {"/assets/griffin-icon.png", "/assets/griffin-icon.png"},
+      {"/assets/griffin.png", "/assets/griffin.png"},
+      {"/assets/style.css", "/assets/style.css"}
+  ]
+  end
+
+  defp copy_template(input, output, project) do
+    input_path = template_path(input)
+    output_path = project.path <> output
+    metadata = eex_metadata(project)
+    Mix.Generator.copy_template(input_path, output_path, metadata)
   end
 
   defp copy_file(input, output, project) do
     input_path = template_path(input)
     output_path = project.path <> output
-    metadata = eex_metadata(project)
-    Mix.Generator.copy_template(input_path, output_path, metadata)
+    Mix.Generator.copy_file(input_path, output_path)
   end
 
   defp template_path(input) do

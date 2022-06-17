@@ -5,59 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title><%%= @title %> · Griffin Framework</title>
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <link rel="stylesheet" href="assets/style.css">
+    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
+    <link rel="stylesheet" href="/assets/style.css">
   </head>
   <body>
-    <div class="container">
-      <header class="d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
-        <a href="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-dark text-decoration-none">
-          <img class="me-2" width="40" height="32" src="assets/griffin-icon.png" />
-          <span class="fs-4">Griffin</span>
-        </a>
+  <div class="container">
+    <header class="d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
+    <a href="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-dark text-decoration-none">
+      <img class="me-2" width="40" height="32" src="/assets/griffin-icon.png" />
+      <span class="fs-4">Griffin</span>
+    </a>
 
-        <ul class="nav nav-pills">
-          <li class="nav-item"><a href="https://hexdocs.pm/griffin-ssg/overview.html" class="nav-link">Get Started</a></li>
-          <li class="nav-item"><a href="https://github.com/elixir-griffin/griffin" class="nav-link">Source</a></li>
+    <ul class="nav nav-pills">
+      <li class="nav-item"><a href="https://hexdocs.pm/griffin_ssg/overview.html" class="nav-link">Get Started</a></li>
+      <li class="nav-item"><a href="https://github.com/elixir-griffin/griffin" class="nav-link">Source</a></li>
+    </ul>
+    </header>
+  </div>
+
+  <div class="px-4 py-5 my-5 text-center">
+    <img class="d-block mx-auto mb-4" src="/assets/griffin.png" alt="logo" height="57">
+    <h1 class="display-5 fw-bold">Welcome to Griffin!</h1>
+    <div class="col-lg-6 mx-auto">
+    <p class="lead mb-4">
+      Quick static site generation with Elixir templates 🧡
+    </p>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="row align-items-start">
+      <article class="col">
+        <h2>Resources</h2>
+        <ul>
+          <li>
+          <a href="https://hexdocs.pm/griffin_ssg/overview.html">Guides &amp; Docs</a>
+          </li>
+          <li>
+          <a href="https://github.com/elixir-griffin/griffin">Source</a>
+          </li>
         </ul>
-      </header>
+      </article>
+      <article class="col">
+        <h2>Help</h2>
+        <ul>
+          <li>
+          <a href="https://elixirforum.com">Elixir Forum</a>
+          </li>
+          <li>
+          <a href="https://elixir-slackin.herokuapp.com/">Elixir on Slack</a>
+          </li>
+          <li>
+          <a href="https://discord.gg/elixir">Elixir on Discord</a>
+          </li>
+        </ul>
+      </article>
     </div>
-
-    <div class="px-4 py-5 my-5 text-center">
-      <img class="d-block mx-auto mb-4" src="assets/griffin.png" alt="logo" width="72" height="57">
-      <h1 class="display-5 fw-bold">Welcome to Griffin!</h1>
-      <div class="col-lg-6 mx-auto">
-        <p class="lead mb-4"><%%= @content %></p>
-      </div>
-    </div>
-
-
-  <section class="row">
-  <article class="column">
-    <h2>Resources</h2>
-    <ul>
-      <li>
-        <a href="https://hexdocs.pm/griffin-ssg/overview.html">Guides &amp; Docs</a>
-      </li>
-      <li>
-        <a href="https://github.com/elixir-griffin/griffin">Source</a>
-      </li>
-    </ul>
-  </article>
-  <article class="column">
-    <h2>Help</h2>
-    <ul>
-      <li>
-        <a href="https://elixirforum.com">Forum</a>
-      </li>
-      <li>
-        <a href="https://elixir-slackin.herokuapp.com/">Elixir on Slack</a>
-      </li>
-      <li>
-        <a href="https://discord.gg/elixir">Elixir on Discord</a>
-      </li>
-    </ul>
-  </article>
-</section>
+  </div>
   </body>
 </html>
