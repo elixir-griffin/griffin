@@ -53,7 +53,7 @@ defmodule Griffin.MixProject do
       {:plug_cowboy, "~> 2.5"},
 
       # docs dependencies
-      {:ex_doc, "~> 0.28.4", only: :docs, runtime: false}
+      {:ex_doc, "~> 0.29", only: :dev, runtime: false}
     ]
   end
 
