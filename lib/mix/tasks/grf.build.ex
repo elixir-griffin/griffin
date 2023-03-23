@@ -14,7 +14,6 @@ defmodule Mix.Tasks.Grf.Build do
 
   @version Mix.Project.config()[:version]
 
-
   @extensions [
     # markdown
     ".md",
@@ -22,7 +21,8 @@ defmodule Mix.Tasks.Grf.Build do
   ]
 
   @all_options [
-    :input, :output
+    :input,
+    :output
   ]
 
   @default_opts %{
@@ -131,7 +131,6 @@ defmodule Mix.Tasks.Grf.Build do
         0
       end
 
-
     Mix.shell().info(
       "Wrote #{files_written} files in #{time_elapsed} seconds (#{time_per_file}ms each, v#{@version})"
     )
@@ -194,7 +193,6 @@ defmodule Mix.Tasks.Grf.Build do
     File.write!(file_path, output)
 
     try do
-
     rescue
       MatchError ->
         # file parsing failed

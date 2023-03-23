@@ -79,7 +79,6 @@ defmodule GriffinSSG do
         end
 
       {:ok, %{front_matter: front_matter, content: content}}
-
     rescue
       MatchError ->
         {:error, :parsing_front_matter_failed}

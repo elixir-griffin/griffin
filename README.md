@@ -2,7 +2,9 @@
 
 > The Elixir framework for the static web.
 
-[![Build Status](https://github.com/elixir-griffin/griffin/workflows/CI/badge.svg)](https://github.com/elixir-griffin/griffin/actions/workflows/ci.yml) [![Hex.pm](https://img.shields.io/hexpm/v/griffin_ssg.svg)](https://hex.pm/packages/griffin_ssg) [![Documentation](https://img.shields.io/badge/documentation-gray)](https://hexdocs.pm/griffin_ssg)
+[![Build Status](https://github.com/elixir-griffin/griffin/workflows/elixir/badge.svg)](https://github.com/elixir-griffin/griffin/actions/workflows/elixir.yaml)
+[![Hex.pm](https://img.shields.io/hexpm/v/griffin_ssg.svg)](https://hex.pm/packages/griffin_ssg)
+[![Documentation](https://img.shields.io/badge/documentation-gray)](https://hexdocs.pm/griffin_ssg)
 
 
 ## Griffin
