@@ -6,7 +6,7 @@ end
 defmodule Grf.New.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
   @scm_url "https://github.com/elixir-griffin/griffin"
 
   # If the elixir requirement is updated, we need to update:
@@ -16,7 +16,7 @@ defmodule Grf.New.MixProject do
   #   3. test/test_helper.exs at the root
   #   4. installer/lib/mix/tasks/grf.new.ex
   #
-  @elixir_requirement "~> 1.13"
+  @elixir_requirement "~> 1.14"
 
   def project do
     [

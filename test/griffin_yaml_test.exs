@@ -1,7 +1,7 @@
-defmodule Griffin.YamlTest do
-  use ExUnit.Case
+defmodule GriffinYamlTest do
+  use ExUnit.Case, async: true
 
-  test "it reads frontmatter data properly" do
+  test "it prases front matter YAML properly" do
     yaml = """
       title: "Griffin Static Site Generator"
       date: "2022-06-08T12:37:55.506374Z"

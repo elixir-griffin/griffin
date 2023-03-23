@@ -1,13 +1,5 @@
 defmodule Mix.Tasks.Grf.Build do
-  use Mix.Task
-
-  @version Mix.Project.config()[:version]
   @shortdoc "Generates a static website with Griffin"
-  @extensions [
-    # markdown
-    ".md",
-    ".markdown"
-  ]
 
   @moduledoc """
   Generates a Griffin static site from existing template files
@@ -18,19 +10,55 @@ defmodule Mix.Tasks.Grf.Build do
   `_site` by default
   """
 
+  use Mix.Task
+
+  @version Mix.Project.config()[:version]
+
+
+  @extensions [
+    # markdown
+    ".md",
+    ".markdown"
+  ]
+
+  @all_options [
+    :input, :output
+  ]
+
+  @default_opts %{
+    input: "src",
+    output: "_site"
+  }
+
+  @switches [
+    # input directory
+    input: :string,
+    # output directory
+    output: :string
+  ]
+
+  @aliases [
+    in: :input,
+    out: :output
+  ]
+
   @impl Mix.Task
-  def run([]) do
-    Mix.Tasks.Compile.run([])
-    input_path = Application.fetch_env!(:griffin_ssg, :input_path)
-    output_path = Application.fetch_env!(:griffin_ssg, :output_path)
+  def run(args, _test_opts \\ []) do
+    {opts, _parsed} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
 
-    # Mix.shell().info("Reading files from #{input_path}")
-    # Mix.shell().info("Writing files to #{output_path}")
+    # Configuration hierarchy:
+    # Environment Variables > Command Line Arguments > Application Config > Defaults
 
-    # check input files
+    opts =
+      @default_opts
+      |> Map.merge(application_config())
+      |> Map.merge(Enum.into(opts, %{}))
+      |> Map.merge(environment_config())
+
+    input_path = opts.input
+    output_path = opts.output
+
     files = get_workable_files(input_path)
-
-    check_workable_files!(files)
 
     # handle layouts
 
@@ -41,15 +69,13 @@ defmodule Mix.Tasks.Grf.Build do
         :ok
     end
 
-    layout_files = get_layout_files() ++ get_theme_layout_files()
+    layout_files = get_layout_files()
     num_layouts = length(layout_files)
 
     # compile layout files
-    # any theme layouts will be compiled after project layouts,
-    # overwriting project layouts with the same name
     Enum.map(layout_files, &compile_layout/1)
 
-    partial_layouts = get_partial_layout_files() ++ get_theme_partial_layout_files()
+    partial_layouts = get_partial_layout_files()
     num_partials = length(partial_layouts)
 
     # compile partials
@@ -59,7 +85,7 @@ defmodule Mix.Tasks.Grf.Build do
           Map.put(
             acc,
             String.to_atom(Path.basename(filepath, ".html.eex")),
-            GriffinSSG.compile_layout(filepath)
+            EEx.compile_file(filepath)
           )
         end)
       rescue
@@ -76,28 +102,6 @@ defmodule Mix.Tasks.Grf.Build do
       :griffin_build_layouts,
       {"__fallback__", EEx.compile_string(fallback_html_layout())}
     )
-
-    # handle assets
-    output_assets_path = Path.expand("assets", output_path)
-    :ok = File.mkdir_p!(output_assets_path)
-    assets = File.cp_r!(Path.expand("assets", File.cwd!()), output_assets_path)
-    Mix.shell().info("copied #{length(assets)} asset files to #{output_path}")
-
-    # theme
-    case Application.get_env(:griffin_ssg, :theme, nil) do
-      nil ->
-        # no theme selected, no assets to copy
-        :ok
-
-      app_name ->
-        # copy theme assets, overwriting project assets
-        theme_assets =
-          File.cp_r!(Path.expand("deps/#{app_name}/assets", File.cwd!()), output_assets_path)
-
-        Mix.shell().info(
-          "copied #{length(theme_assets)} asset files from theme #{app_name} to #{output_path}"
-        )
-    end
 
     # Mix.shell().info("workable files #{get_workable_files(input_path)}")
 
@@ -121,28 +125,39 @@ defmodule Mix.Tasks.Grf.Build do
     time_elapsed = :erlang.float_to_binary(time_in_microseconds / 1_000_000, decimals: 2)
 
     time_per_file =
-      :erlang.float_to_binary(time_in_microseconds / (1_000 * files_written), decimals: 1)
+      if files_written > 0 do
+        :erlang.float_to_binary(time_in_microseconds / (1_000 * files_written), decimals: 1)
+      else
+        0
+      end
+
 
     Mix.shell().info(
       "Wrote #{files_written} files in #{time_elapsed} seconds (#{time_per_file}ms each, v#{@version})"
     )
   end
 
-  def run(_) do
-    Mix.raise(
-      "Unprocessable arguments, please use `mix help grf.build` for documentation on correct usage"
-    )
-  end
-
   defp generate_file(input_path, output_path, extname) do
-    # Mix.shell().info("reading: #{input_path}")
+    Mix.shell().info("reading: #{input_path}")
 
-    {frontmatter, content} = GriffinSSG.parse_file(input_path)
+    parse_result =
+      input_path
+      |> File.read!()
+      |> GriffinSSG.parse()
+
+    if {:error, :parsing_front_matter_failed} == parse_result do
+      Mix.raise("File parsing failed for file #{input_path}")
+    end
+
+    {:ok, %{front_matter: frontmatter, content: content}} =
+      input_path
+      |> File.read!()
+      |> GriffinSSG.parse()
 
     # create full directory path
     file_directory = "#{output_path}/#{Path.basename(input_path, extname)}"
 
-    # Mix.shell().info("creating path: #{file_directory}")
+    Mix.shell().info("creating path: #{file_directory}")
 
     file_directory
     |> Path.expand()
@@ -150,9 +165,9 @@ defmodule Mix.Tasks.Grf.Build do
 
     file_path = "#{file_directory}/index.html"
 
-    # Mix.shell().info("writing: #{file_path} from #{input_path} (#{extension_parser(extname)})")
+    Mix.shell().info("writing: #{file_path} from #{input_path} (#{extension_parser(extname)})")
 
-    # frontmatter|> IO.inspect()
+    frontmatter = frontmatter || %{}
 
     layout_name = Map.get(frontmatter, :layout, "__fallback__")
 
@@ -166,11 +181,25 @@ defmodule Mix.Tasks.Grf.Build do
       |> :ets.lookup(:__partials__)
       |> then(fn [{:__partials__, partials}] -> partials end)
 
-    GriffinSSG.render(file_path, layout,
-      frontmatter: frontmatter,
-      content: content,
-      assigns: %{partials: partials}
-    )
+    output =
+      GriffinSSG.render(
+        layout,
+        %{
+          front_matter: frontmatter,
+          content: content,
+          assigns: %{partials: partials, title: "Griffin"}
+        }
+      )
+
+    File.write!(file_path, output)
+
+    try do
+
+    rescue
+      MatchError ->
+        # file parsing failed
+        Mix.raise("File parsing failed for file #{input_path}")
+    end
   end
 
   defp print_compiled_layouts(num_layouts, num_partials) do
@@ -179,12 +208,8 @@ defmodule Mix.Tasks.Grf.Build do
     )
   end
 
-  defp check_workable_files!(files) do
-    if files == [] do
-      Mix.raise(
-        "No input files found in #{Application.get_env(:griffin_ssg, :input_path, "_site")}, please ensure there are template files in the input path"
-      )
-    end
+  defp extension_parser(ext) when ext in [".md", ".markdown"] do
+    "markdown"
   end
 
   defp get_workable_files(input_path, extensions \\ @extensions) do
@@ -206,35 +231,37 @@ defmodule Mix.Tasks.Grf.Build do
     |> Enum.filter(&(Path.extname(&1) in extensions))
   end
 
-  defp get_theme_layout_files(extensions \\ [".eex"]) do
-    case Application.get_env(:griffin_ssg, :theme, nil) do
-      nil ->
-        []
-
-      app_name ->
-        Path.wildcard("#{File.cwd!()}/deps/#{app_name}/lib/layouts/*.html.eex")
-        |> Enum.filter(&(not String.starts_with?(&1, ["_"])))
-        |> Enum.filter(&(Path.extname(&1) in extensions))
-    end
-  end
-
-  defp get_theme_partial_layout_files(extensions \\ [".eex"]) do
-    case Application.get_env(:griffin_ssg, :theme, nil) do
-      nil ->
-        []
-
-      app_name ->
-        Path.wildcard("#{File.cwd!()}/deps/#{app_name}/lib/layouts/partials/*.*", match_dot: false)
-        |> Enum.filter(&(not String.starts_with?(&1, ["_"])))
-        |> Enum.filter(&(Path.extname(&1) in extensions))
-    end
-  end
-
   defp compile_layout(filepath) do
     :ets.insert(
       :griffin_build_layouts,
-      {Path.basename(filepath, ".html.eex"), GriffinSSG.compile_layout(filepath)}
+      {Path.basename(filepath, ".html.eex"), EEx.compile_file(filepath)}
     )
+  end
+
+  defp application_config do
+    @all_options
+    |> Enum.map(fn option -> {option, get_app_env(option)} end)
+    |> Enum.into(%{})
+    |> Map.filter(fn {_, v} -> not is_nil(v) end)
+  end
+
+  defp environment_config do
+    @all_options
+    |> Enum.map(fn option -> {option, get_env(option)} end)
+    |> Enum.into(%{})
+    |> Map.filter(fn {_, v} -> not is_nil(v) end)
+  end
+
+  defp get_env(key) do
+    key
+    |> Atom.to_string()
+    |> String.upcase()
+    |> then(fn key -> "GRIFFIN_" <> key end)
+    |> System.get_env()
+  end
+
+  defp get_app_env(key) do
+    Application.get_env(:griffin_ssg, key)
   end
 
   defp fallback_html_layout do
@@ -245,7 +272,7 @@ defmodule Mix.Tasks.Grf.Build do
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
-        <title><%= @content %></title>
+        <title><%= @title %></title>
         <link rel="stylesheet" href="style.css">
       </head>
       <body>
@@ -254,5 +281,4 @@ defmodule Mix.Tasks.Grf.Build do
     </html>
     """
   end
-
 end

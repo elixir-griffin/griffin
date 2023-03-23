@@ -1,14 +1,14 @@
 defmodule Griffin.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
   @scm_url "https://github.com/elixir-griffin/griffin"
 
   def project do
     [
       app: :griffin_ssg,
       version: @version,
-      elixir: "~> 1.13",
+      elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       name: "Griffin",
@@ -17,7 +17,8 @@ defmodule Griffin.MixProject do
       homepage_url: @scm_url,
       elixirc_paths: elixirc_paths(Mix.env()),
       docs: docs(),
-      package: package()
+      package: package(),
+      aliases: aliases()
     ]
   end
 
@@ -27,7 +28,7 @@ defmodule Griffin.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      mod: {GriffinSSG, []},
+      mod: {GriffinSSGApp, []},
       extra_applications: [:logger, :eex],
       env: [
         browser_open: false
@@ -73,44 +74,35 @@ defmodule Griffin.MixProject do
 
   defp extras do
     [
-      "guides/introduction/overview.md",
-      "guides/introduction/installation.md",
-      "guides/introduction/up_and_running.md"
-      # "guides/introduction/community.md",
-      # "guides/directory_structure.md",
-      # "guides/request_lifecycle.md",
-      # "guides/plug.md",
-      # "guides/routing.md",
-      # "guides/controllers.md",
-      # "guides/views.md",
-      # "guides/ecto.md",
-      # "guides/contexts.md",
-      # "guides/mix_tasks.md",
-      # "guides/telemetry.md",
-      # "guides/asset_management.md",
-      # "guides/authentication/mix_phx_gen_auth.md",
-      # "guides/real_time/channels.md",
-      # "guides/real_time/presence.md",
-      # "guides/testing/testing.md",
-      # "guides/testing/testing_contexts.md",
-      # "guides/testing/testing_controllers.md",
-      # "guides/testing/testing_channels.md",
-      # "guides/deployment/deployment.md",
-      # "guides/deployment/releases.md",
-      # "guides/deployment/gigalixir.md",
-      # "guides/deployment/fly.md",
-      # "guides/deployment/heroku.md",
-      # "guides/howto/custom_error_pages.md",
-      # "guides/howto/using_ssl.md",
-      # "CHANGELOG.md"
+      "guides/why_griffin/overview.md",
+      "guides/why_griffin/glossary.md",
+      "guides/getting_started/getting_started.md",
+      "guides/working_with_templates/adding_js_css_fonts.md",
+      "guides/working_with_templates/layouts.md",
+      "guides/working_with_templates/collections.md",
+      "guides/working_with_templates/pagination.md",
+      "guides/working_with_templates/permalinks.md"
     ]
   end
 
   defp groups_for_extras do
     [
-      Introduction: ~r/guides\/introduction\/.?/,
-      Guides: ~r/guides\/[^\/]+\.md/,
-      Deployment: ~r/guides\/deployment\/.?/
+      "Why Griffin?": ~r/guides\/why_griffin\/.?/,
+      "Getting Started": ~r/guides\/getting_started\/.?/,
+      "Working with Templates": ~r/guides\/working_with_templates\/.?/
     ]
+  end
+
+  defp aliases do
+    [
+      "archive.build": &raise_on_archive_build/1
+    ]
+  end
+
+  defp raise_on_archive_build(_) do
+    Mix.raise("""
+    You are trying to install "griffin_ssg" as an archive, which is not supported. \
+    You probably meant to install "grf_new" instead
+    """)
   end
 end

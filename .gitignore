@@ -31,3 +31,6 @@ griffin_ssg-*.tar
 /installer/deps/
 /installer/doc/
 /installer/grf_new-*.ez
+
+# Generated directory
+/_site/

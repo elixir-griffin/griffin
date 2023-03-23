@@ -1,77 +1,50 @@
 defmodule GriffinSSG do
   @moduledoc """
-  This is the documentation for the Griffin project.
+  Griffin is a Static Site Generator.
 
-  By default, Griffin will scan for content in the `priv/content` directory
-  and output generated files to the `_site` directory.
+  Griffin reads Markdown files from disk and outputs HTML pages. A combination
+  of Application level config, frontmatter attributes and layout files can be
+  used to customize the output of each file and to build the page structure of
+  the website.
 
-  Griffin depends on the following libraries:
+  Each input file can have a first segment called "front matter" that lists
+  metadata about the file contents. This front matter segment is delineated by
+  a sequence of characters `---` and the contents should be in YAML format.
+  The contents that follow can contain plain content or reference front matter
+  attributes.
+  Here is an example of a short Markdown file with some front matter attributes:
 
-    * [Plug](https://hexdocs.pm/plug) - a specification and conveniences
-      for composable modules in between web applications
+  ```
+  ---
+  title: "Griffin Static Site Generator"
+  draft: true
+  ---
+
+  # Griffin Static Site Generator
+  Griffin is an Elixir framework for building static websites.
+  ```
+
   """
-
-  use Application
-
-  @doc false
-  def start(_type, _args) do
-    children = [
-      {Plug.Cowboy, scheme: :http, plug: GriffinSSG.Web.Plug, options: [port: 4000]}
-    ]
-
-    Supervisor.start_link(children, strategy: :one_for_one, name: Griffin.Supervisor)
-  end
 
   @doc """
-  Reads a file from disk and returns
-  the parsed frontmatter metadata and the file contents.
+  Renders a layout with a given content, front matter and assigns.
+
+  The layout is assumed to be a compiled EEx file or string, such that calling
+  `Code.eval_quoted/2` on the layout will generate a correct result.
   """
-  def parse_file(path, _options \\ []) do
-    file_content = File.read!(path)
-
-    # split file contents into frontmatter metadata and content
-    [frontmatter, content] =
-      case String.split(file_content, ~r/\n---\n/, parts: 2) do
-        [content] ->
-          [nil, content]
-
-        [raw_frontmatter, content] ->
-          [parse_frontmatter(raw_frontmatter), parse_content(content)]
-      end
-
-    {frontmatter, content}
-  end
-
-  @doc """
-  Compiles a template file from disk into quoted code
-  that can then be used by `GriffinSSG.render/3`.
-  """
-  def compile_layout(path, _options \\ []) do
-    EEx.compile_file(path)
-  end
-
-  @doc """
-  Renders a layout to file, taking in a number of options that affect the rendered output.
-
-  The following `options` are accepted:
-
-    * `frontmatter`   - the frontmatter attributes
-    * `content`       - the content to render in the layout
-    * `assigns`       - a map with template variables to be used in the layout
-  """
-  def render(path, layout, options) do
-    frontmatter = Keyword.fetch!(options, :frontmatter)
-    content = Keyword.fetch!(options, :content)
-    assigns = Keyword.get(options, :assigns, %{})
+  def render(layout, options) do
+    front_matter = Map.fetch!(options, :front_matter)
+    content = Map.fetch!(options, :content)
+    assigns = Map.get(options, :assigns, %{})
 
     flat_assigns =
-      frontmatter
+      front_matter
       |> Map.put(:content, content)
       |> Map.merge(assigns)
       # here we're compiling all existing partials when we might only need a very small subset.
       # TODO compile only required partials by looking at args in the quoted expression
       |> then(fn current_assigns ->
-        Map.update!(current_assigns, :partials, fn partials ->
+        Map.update(current_assigns, :partials, %{}, fn partials ->
           partials
           |> Enum.map(fn partial ->
             {compiled, _bindings} = Code.eval_quoted(partial, assigns: current_assigns)
@@ -83,36 +56,34 @@ defmodule GriffinSSG do
       |> Enum.to_list()
 
     {result, _bindings} = Code.eval_quoted(layout, assigns: flat_assigns)
-    File.write!(path, result)
+    result
   end
 
-  @doc false
-  def process_file(path) do
-    IO.inspect("reading from #{path}")
-    content = File.read!(path)
-    # string split crashes if the file only contains html and
-    # does not contain front matter annotations.
-    [yaml, markdown] = String.split(content, ~r/\n---\n/, parts: 2)
-    [metadata] = YamlElixir.read_all_from_string!(yaml, atoms: true)
-    html = Earmark.as_html!(markdown)
-    IO.inspect(html)
+  @doc """
+  Parses the string contents of a file into two components: front matter and file content.
 
-    metadata =
-      metadata
-      |> Map.put("content", html)
-      |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
-      |> IO.inspect(label: "metadata")
+  Front matter is optional metadata about the content that is defined at the top of the file.
+  The content immediately follows the front matter and may reference front matter variables.
 
-    # IO.inspect(html, label: "html")
-    rendered = EEx.eval_file("installer/blog/priv/layouts/default.html.eex", assigns: metadata)
+  Returns a map with both the front matter and file content.
+  """
+  def parse(string_content) do
+    try do
+      {front_matter, content} =
+        case String.split(string_content, ~r/\n---\n/, parts: 2) do
+          [content] ->
+            {nil, parse_content(content)}
 
-    unless html == "" do
-      output_path = Path.expand("#{path}.html")
-      IO.inspect("writing to #{output_path}")
-      File.write!(output_path, rendered)
+          [raw_frontmatter, content] ->
+            {parse_frontmatter(raw_frontmatter), parse_content(content)}
+        end
+
+      {:ok, %{front_matter: front_matter, content: content}}
+
+    rescue
+      MatchError ->
+        {:error, :parsing_front_matter_failed}
     end
-
-    :ok
   end
 
   defp parse_frontmatter(yaml) do
