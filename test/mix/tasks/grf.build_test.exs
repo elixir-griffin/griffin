@@ -193,14 +193,17 @@ defmodule Grf.BuildTest do
         "--input",
         @input_path,
         "--output",
-        @output_path,
+        @output_path
       ])
 
       assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
 
       assert_file(@output_path <> "/a/index.html", fn file ->
         assert file =~ "<!DOCTYPE html>"
-        assert file =~ "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+
+        assert file =~
+                 "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+
         assert file =~ "this is file A"
       end)
     end)
@@ -230,12 +233,11 @@ defmodule Grf.BuildTest do
       this is file B
       """)
 
-
       Mix.Tasks.Grf.Build.run([
         "--input",
         @input_path,
         "--output",
-        @output_path,
+        @output_path
       ])
 
       assert_received {:mix_shell, :info, ["Wrote 2 files in " <> _]}

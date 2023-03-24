@@ -98,7 +98,7 @@ defmodule Mix.Tasks.Grf.Build do
           File.mkdir_p(output_path <> "/" <> path)
         else
           File.mkdir_p(output_path <> "/" <> Path.dirname(path))
-        :ok = File.cp(path, output_path <> "/" <> path)
+          :ok = File.cp(path, output_path <> "/" <> path)
         end
       end)
     end
