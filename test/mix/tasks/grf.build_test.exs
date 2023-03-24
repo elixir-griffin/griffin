@@ -38,7 +38,15 @@ defmodule Grf.BuildTest do
       <html><title><%= @title %></title><body><div id="b"><%= @content%></div></body></html>
       """)
 
-      Mix.Tasks.Grf.Build.run(["--input", @input_path, "--output", @output_path, "--layouts", @input_path <> "/layouts"])
+      Mix.Tasks.Grf.Build.run([
+        "--input",
+        @input_path,
+        "--output",
+        @output_path,
+        "--layouts",
+        @input_path <> "/layouts"
+      ])
+
       assert_received {:mix_shell, :info, ["Wrote 2 files in " <> _]}
 
       assert_file(@output_path <> "/a/index.html", fn file ->
@@ -98,7 +106,15 @@ defmodule Grf.BuildTest do
       <div id="three"><%= @baz %></div></body></html>
       """)
 
-      Mix.Tasks.Grf.Build.run(["--input", @input_path, "--output", @output_path, "--layouts", @input_path <> "/layouts"])
+      Mix.Tasks.Grf.Build.run([
+        "--input",
+        @input_path,
+        "--output",
+        @output_path,
+        "--layouts",
+        @input_path <> "/layouts"
+      ])
+
       assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
 
       assert_file(@output_path <> "/a/index.html", fn file ->

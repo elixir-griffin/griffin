@@ -122,7 +122,6 @@ defmodule Mix.Tasks.Grf.Build do
               global_input_dir = input_path
               global_output_dir = output_path
 
-
               path_basename =
                 if Path.basename(file, extname) == "index" do
                   ""
