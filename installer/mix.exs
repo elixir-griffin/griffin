@@ -6,7 +6,7 @@ end
 defmodule Grf.New.MixProject do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.3.0"
   @scm_url "https://github.com/elixir-griffin/griffin"
 
   # If the elixir requirement is updated, we need to update:

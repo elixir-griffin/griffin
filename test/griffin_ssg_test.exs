@@ -52,7 +52,7 @@ defmodule GriffinSSGTest do
                This is a test file containing markdown only.
                """)
 
-      assert frontmatter == nil
+      assert frontmatter == %{}
 
       assert content =~ "Content Only"
     end

@@ -1,7 +1,7 @@
 defmodule Griffin.MixProject do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.3.0"
   @scm_url "https://github.com/elixir-griffin/griffin"
 
   def project do
@@ -50,7 +50,7 @@ defmodule Griffin.MixProject do
     [
       {:yaml_elixir, "~> 2.9"},
       {:earmark, "~> 1.4"},
-      {:plug_cowboy, "~> 2.5"},
+      {:plug_cowboy, "~> 2.6"},
 
       # docs dependencies
       {:ex_doc, "~> 0.29", only: :dev, runtime: false}

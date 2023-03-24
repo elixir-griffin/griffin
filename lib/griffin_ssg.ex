@@ -72,7 +72,7 @@ defmodule GriffinSSG do
       {front_matter, content} =
         case String.split(string_content, ~r/\n---\n/, parts: 2) do
           [content] ->
-            {nil, parse_content(content)}
+            {%{}, parse_content(content)}
 
           [raw_frontmatter, content] ->
             {parse_frontmatter(raw_frontmatter), parse_content(content)}

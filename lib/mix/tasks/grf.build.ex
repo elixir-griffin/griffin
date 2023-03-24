@@ -23,13 +23,17 @@ defmodule Mix.Tasks.Grf.Build do
   @all_options [
     :input,
     :output,
-    :layouts
+    :layouts,
+    :passthrough_copies,
+    :ignore
   ]
 
   @default_opts %{
     input: "src",
     output: "_site",
-    layouts: "#{File.cwd!()}/lib/layouts"
+    layouts: "#{File.cwd!()}/lib/layouts",
+    passthrough_copies: [],
+    ignore: []
   }
 
   @switches [
@@ -38,7 +42,11 @@ defmodule Mix.Tasks.Grf.Build do
     # output directory
     output: :string,
     # layouts directory
-    layouts: :string
+    layouts: :string,
+    # passthrough copies (comma separated)
+    passthrough_copies: :string,
+    # ignore files (comma separated)
+    ignore: :string
   ]
 
   @aliases [
@@ -62,7 +70,58 @@ defmodule Mix.Tasks.Grf.Build do
     input_path = opts.input
     output_path = opts.output
 
-    files = get_workable_files(input_path)
+    default_hooks = %{
+      before: [],
+      after: []
+    }
+
+    # Call before hooks
+    for hook <- get_app_env(:hooks, default_hooks).before do
+      hook.()
+    end
+
+    # Passthrough copy files are passed in as a comma separated string of values
+    # while in the configuration they are read as a standard Elixir list
+    passthrough_copy_args =
+      if is_binary(opts.passthrough_copies) do
+        String.split(opts.passthrough_copies, ",")
+      else
+        opts.passthrough_copies
+      end
+
+    for arg <- passthrough_copy_args do
+      arg
+      |> Path.wildcard()
+      |> Enum.map(fn path ->
+        # e.g. file 'a/b/c/d.js' will be copied to '<output_dir>/a/b/c/d.js'
+        if File.dir?(path) do
+          File.mkdir_p(output_path <> "/" <> path)
+        else
+          File.mkdir_p(output_path <> "/" <> Path.dirname(path))
+        :ok = File.cp(path, output_path <> "/" <> path)
+        end
+      end)
+    end
+
+    # Ignore files are passed in as a comma separated string of values
+    # while in the configuration they are read as a standard Elixir list
+    ignore_args =
+      if is_binary(opts.passthrough_copies) do
+        String.split(opts.passthrough_copies, ",")
+      else
+        opts.passthrough_copies
+      end
+
+    ignore_files =
+      for arg <- ignore_args do
+        arg
+        |> Path.wildcard()
+        |> Enum.filter(fn path ->
+          not File.dir?(path)
+        end)
+      end
+
+    files = get_workable_files(input_path) -- ignore_files
 
     # handle layouts
 
@@ -89,7 +148,7 @@ defmodule Mix.Tasks.Grf.Build do
         Enum.reduce(partial_layouts, %{}, fn filepath, acc ->
           Map.put(
             acc,
-            String.to_atom(Path.basename(filepath, ".html.eex")),
+            String.to_atom(Path.basename(filepath, Path.extname(filepath))),
             EEx.compile_file(filepath)
           )
         end)
@@ -122,23 +181,34 @@ defmodule Mix.Tasks.Grf.Build do
               global_input_dir = input_path
               global_output_dir = output_path
 
-              path_basename =
-                if Path.basename(file, extname) == "index" do
-                  ""
+              # TODO switch to parsing every file before rendering them out
+              # this will be useful to generate collections and to add useful keys
+              # like URL and others as keys to the layout
+              # (e.g. being able to do refer @url within the layout)
+              {:ok, %{front_matter: front_matter}} = GriffinSSG.parse(File.read!(file))
+
+              file_output_path =
+                if Map.has_key?(front_matter, :permalink) do
+                  global_output_dir <> "/" <> front_matter.permalink
                 else
-                  "/" <> Path.basename(file, extname)
+                  path_basename =
+                    if Path.basename(file, extname) == "index" do
+                      ""
+                    else
+                      "/" <> Path.basename(file, extname)
+                    end
+
+                  path_relative_to_input_dir =
+                    case String.split(Path.dirname(file_path), global_input_dir) do
+                      ["", ""] ->
+                        ""
+
+                      ["", "/" <> path_relative_to_input_dir] ->
+                        "/" <> path_relative_to_input_dir
+                    end
+
+                  global_output_dir <> path_relative_to_input_dir <> path_basename
                 end
-
-              path_relative_to_input_dir =
-                case String.split(Path.dirname(file_path), global_input_dir) do
-                  ["", ""] ->
-                    ""
-
-                  ["", "/" <> path_relative_to_input_dir] ->
-                    "/" <> path_relative_to_input_dir
-                end
-
-              file_output_path = global_output_dir <> path_relative_to_input_dir <> path_basename
 
               generate_file(file_path, file_output_path, Path.extname(file))
             end)
@@ -148,6 +218,11 @@ defmodule Mix.Tasks.Grf.Build do
           Task.await(task, :infinity)
         end
       end)
+
+    # Call before hooks
+    for hook <- get_app_env(:hooks, default_hooks).after do
+      hook.()
+    end
 
     files_written = length(response)
     time_elapsed = :erlang.float_to_binary(time_in_microseconds / 1_000_000, decimals: 2)
@@ -208,13 +283,18 @@ defmodule Mix.Tasks.Grf.Build do
       |> :ets.lookup(:__partials__)
       |> then(fn [{:__partials__, partials}] -> partials end)
 
+    layout_assigns =
+      filters()
+      |> Map.merge(shortcodes())
+      |> Map.merge(%{partials: partials, title: "Griffin"})
+
     output =
       GriffinSSG.render(
         layout,
         %{
           front_matter: frontmatter,
           content: content,
-          assigns: %{partials: partials, title: "Griffin"}
+          assigns: layout_assigns
         }
       )
 
@@ -260,7 +340,7 @@ defmodule Mix.Tasks.Grf.Build do
   defp compile_layout(filepath) do
     :ets.insert(
       :griffin_build_layouts,
-      {Path.basename(filepath, ".html.eex"), EEx.compile_file(filepath)}
+      {Path.basename(filepath, Path.extname(filepath)), EEx.compile_file(filepath)}
     )
   end
 
@@ -286,8 +366,37 @@ defmodule Mix.Tasks.Grf.Build do
     |> System.get_env()
   end
 
-  defp get_app_env(key) do
-    Application.get_env(:griffin_ssg, key)
+  defp get_app_env(key, default \\ nil) do
+    Application.get_env(:griffin_ssg, key, default)
+  end
+
+  defp filters() do
+    Map.merge(default_filters(), get_app_env(:filters, %{}))
+  end
+
+  defp default_filters() do
+    %{
+      uppercase: &String.upcase/1,
+      lowercase: &String.downcase/1
+    }
+  end
+
+  defp shortcodes() do
+    Map.merge(default_shortcodes(), get_app_env(:shortcodes, %{}))
+  end
+
+  defp default_shortcodes() do
+    %{
+      youtube: fn slug ->
+        """
+        <iframe width="560" height="315" src="https://www.youtube.com/embed/#{slug}"
+                title="YouTube video player" frameborder="0" allow="accelerometer;
+                autoplay; clipboard-write; encrypted-media; gyroscope;
+                picture-in-picture; web-share" allowfullscreen>
+        </iframe>
+        """
+      end
+    }
   end
 
   defp fallback_html_layout do
