@@ -22,19 +22,23 @@ defmodule Mix.Tasks.Grf.Build do
 
   @all_options [
     :input,
-    :output
+    :output,
+    :layouts
   ]
 
   @default_opts %{
     input: "src",
-    output: "_site"
+    output: "_site",
+    layouts: "#{File.cwd!()}/lib/layouts"
   }
 
   @switches [
     # input directory
     input: :string,
     # output directory
-    output: :string
+    output: :string,
+    # layouts directory
+    layouts: :string
   ]
 
   @aliases [
@@ -69,13 +73,14 @@ defmodule Mix.Tasks.Grf.Build do
         :ok
     end
 
-    layout_files = get_layout_files()
+    layouts_dir = opts.layouts
+    layout_files = get_layout_files(layouts_dir)
     num_layouts = length(layout_files)
 
     # compile layout files
     Enum.map(layout_files, &compile_layout/1)
 
-    partial_layouts = get_partial_layout_files()
+    partial_layouts = get_partial_layout_files(layouts_dir)
     num_partials = length(partial_layouts)
 
     # compile partials
@@ -112,7 +117,31 @@ defmodule Mix.Tasks.Grf.Build do
         tasks =
           for file <- files do
             Task.async(fn ->
-              generate_file(file, output_path, Path.extname(file))
+              file_path = file
+              extname = Path.extname(file)
+              global_input_dir = input_path
+              global_output_dir = output_path
+
+
+              path_basename =
+                if Path.basename(file, extname) == "index" do
+                  ""
+                else
+                  "/" <> Path.basename(file, extname)
+                end
+
+              path_relative_to_input_dir =
+                case String.split(Path.dirname(file_path), global_input_dir) do
+                  ["", ""] ->
+                    ""
+
+                  ["", "/" <> path_relative_to_input_dir] ->
+                    "/" <> path_relative_to_input_dir
+                end
+
+              file_output_path = global_output_dir <> path_relative_to_input_dir <> path_basename
+
+              generate_file(file_path, file_output_path, Path.extname(file))
             end)
           end
 
@@ -154,7 +183,7 @@ defmodule Mix.Tasks.Grf.Build do
       |> GriffinSSG.parse()
 
     # create full directory path
-    file_directory = "#{output_path}/#{Path.basename(input_path, extname)}"
+    file_directory = output_path
 
     Mix.shell().info("creating path: #{file_directory}")
 
@@ -217,14 +246,14 @@ defmodule Mix.Tasks.Grf.Build do
     |> Enum.filter(&(Path.extname(&1) in extensions))
   end
 
-  defp get_layout_files(extensions \\ [".eex"]) do
-    Path.wildcard("#{File.cwd!()}/lib/layouts/*.*", match_dot: false)
+  defp get_layout_files(path, extensions \\ [".eex"]) do
+    Path.wildcard("#{path}/*.*", match_dot: false)
     |> Enum.filter(&(not String.starts_with?(&1, ["_"])))
     |> Enum.filter(&(Path.extname(&1) in extensions))
   end
 
-  defp get_partial_layout_files(extensions \\ [".eex"]) do
-    Path.wildcard("#{File.cwd!()}/lib/layouts/partials/*.*", match_dot: false)
+  defp get_partial_layout_files(path, extensions \\ [".eex"]) do
+    Path.wildcard("#{path}/partials/*.*", match_dot: false)
     |> Enum.filter(&(not String.starts_with?(&1, ["_"])))
     |> Enum.filter(&(Path.extname(&1) in extensions))
   end
