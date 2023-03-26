@@ -6,8 +6,191 @@ defmodule Mix.Tasks.Grf.Build do
 
       $ mix grf.build
 
-  A set of files will be written to the configured output directory,
-  `_site` by default
+  ## Input directory
+
+  Griffin searches for Markdown files in the input directory,
+  which defaults to the `src` directory.
+  This can be configured with the `-in` or `--input` option.
+
+  ## Output directory
+
+  The output directory is where Griffin writes HTML files to.
+  It defaults to `_site` and can be configured with the `-out` or `--output`
+  option.
+
+  ## Layouts directory
+
+  Griffin reads all layouts and partials from the same directory,
+  which defaults to `lib/layouts`. The partials directory is assumed to be
+  a subdirectory of the layouts directory (e.g. `lib/layout/partials`).
+  This directory can be changed with the `--layouts` option.
+
+  ## Passthrough copy
+
+  Passthrough copy files are files that shouldn't be processed but simply
+  copied over to the output directory. This is useful for assets like images,
+  fonts, javascript and css.
+  A list of comma separated file or wildcard paths may be provided via the
+  `--passthrough-copies` option. Here's an example:
+
+      $ mix grf.build --passthrough-copies=assets/js/*,fonts/*,images/*.png
+
+  This command will copy all files in the `assets/js`, `fonts`,
+  and all PNG images in the `images` directory over to the same path relative
+  to the output directory. In the above example and assuming the default
+  `_site` output directory, Griffin would copy files to `_site/assets/js`,
+  `_site/fonts` and `_site/images` directories, respectively.
+  A single assets directory can be copied with subdirectories included with a
+  wildcard such as `assets/**`
+
+  > #### About passthrough copy paths {: .neutral}
+  >
+  > The paths mentioned in this option are not relative to the input
+  > directory, and instead are relative to the root of the Griffin project.
+
+
+  ## Ignore files
+
+  Griffin allows users to ignore specific files and/or directories via the
+  `--ignore` option. This is useful for ignoring markdown files like readme
+  and changelog files that might be in the source directory and that should
+  not be processed. A list of comma separated file wildcard paths can be
+  passed using this option to ignore files or directories from processing.
+
+  Here's an example:
+
+      $ mix grf.build --ignore=src/posts/drafts/*,src/README.md
+
+  This command will ignore all input files from the `src/posts/drafts`
+  directory along with the `src/README.md` file.
+
+  > #### About ignore file paths {: .neutral}
+  >
+  > The paths mentioned in this option are not relative to the input
+  > directory, and instead are relative to the root of the Griffin project.
+
+  ## Other options
+
+  Griffin uses other configuration options that can be changed by setting
+  specific application environment keys under the `:griffin_ssg` application.
+  These other options include features that cannot be passed in as a single
+  CLI option like hooks, shortcodes, filters, and more.
+
+  ### Hooks
+
+  Hooks are a way to allow user defined functions to be called at specific
+  stages of the website generation process. The available hook events
+  are:
+
+    - `before`, executed before the build process starts
+    - `after`, executed after Griffin finishes building.
+
+  The result from invoking these hooks is not checked.
+
+  Multiple hooks of each kind can be set under
+  the `:hooks` configuration key like so:
+
+  ```
+  config :griffin_ssg,
+    hooks: %{
+      before: [
+        fn { directories, run_mode, output_mode } ->
+          # Read more below about each type of event
+          :ok
+        end
+      ],
+      after: [
+        fn { directories, results, run_mode, output_mode } ->
+          # Read more below about each type of event
+          :ok
+        end
+      ]
+    }
+  ```
+
+  #### Hook event arguments
+
+  These are the arguments that are passed in to the hook events:
+
+    * `directories`: a map containing the current project directories
+        * `directories.input` (defaults to `src`)
+        * `directories.output` (defaults to `_site`)
+        * `directories.layouts` (defaults to `lib/layouts`)
+    * `output_mode`: currently hardcoded to "filesystem"
+    * `run_mode`: currently hardcoded to "build"
+    * `results`: *(only avaiable on the `after` event)*. A list with the
+      processed Griffin output
+        * Each individual list item will have
+          `{ input_path, output_path, url, content }`
+
+  ### Shortcodes
+
+  Shortcodes are user definable functions that can be invoked inside layouts.
+  These functions enable easily reusable content. Shortcodes can be added under
+  the `shortcodes` configuration key. Here's an example shortcode for embedding
+  YouTube videos:
+
+  ```
+  config :griffin_ssg,
+    shortcodes: %{
+      youtube: fn slug ->
+        \"\"\"
+        <iframe width="560" height="315" src="https://www.youtube.com/embed/\#{slug}"
+                title="YouTube video player" frameborder="0" allow="accelerometer;
+                autoplay; clipboard-write; encrypted-media; gyroscope;
+                picture-in-picture; web-share" allowfullscreen>
+        </iframe>
+        \"\"\"
+      end
+    }
+  ```
+
+  This will create a `youtube` assigns variable that can be referenced in
+  all layouts like so:
+
+  ```
+  <main>
+    <p>Here's a classic YouTube video:</p>
+    <%= @youtube.("dQw4w9WgXcQ") %>
+  </main>
+  ```
+
+  Shortcodes can be defined with an arbitrary number of arguments and they are
+  expected to return content. They can reference variables or other shortcodes.
+  When using shortcodes users can think about them as function components.
+
+  ### Filters
+
+  Filters are utility functions that can be used in layouts to transform and
+  data into a more presentable format.
+
+  Like shortcodes, they are set in the application environment and they are
+  processed into assigns variables that can be referred in all layouts.
+
+  Here's an example of a layout that uses an `uppercase` filter:
+
+  ```
+  <h1><%= @username |> @uppercase.() %></h1>
+  ```
+
+  This filter can be defined in the configuration file under the `:filters`
+  configuration key:
+
+  ```
+  config :griffin_ssg,
+    filters: %{
+      uppercase: &String.upcase/1
+    }
+  ```
+
+  > #### Filters versus Shortcodes {: .neutral}
+  >
+  > Both filters and shortcodes are user defined functions that generate output
+  > in some way. While shortcodes are meant to be convenient function
+  > components that generate any sort of output, filters are typically designed
+  > to be chained, so that the value returned from one filter is piped into the
+  > next filter.
+
   """
 
   use Mix.Task
@@ -123,7 +306,7 @@ defmodule Mix.Tasks.Grf.Build do
 
     files = get_workable_files(input_path) -- ignore_files
 
-    # handle layouts
+    # Compile layouts and partials and store them in ETS
 
     try do
       :ets.new(:griffin_build_layouts, [:ordered_set, :public, :named_table])
@@ -278,15 +461,11 @@ defmodule Mix.Tasks.Grf.Build do
       |> :ets.lookup(layout_name)
       |> then(fn [{^layout_name, layout}] -> layout end)
 
-    partials =
-      :griffin_build_layouts
-      |> :ets.lookup(:__partials__)
-      |> then(fn [{:__partials__, partials}] -> partials end)
-
     layout_assigns =
-      filters()
-      |> Map.merge(shortcodes())
-      |> Map.merge(%{partials: partials, title: "Griffin"})
+      filters_assigns()
+      |> Map.merge(shortcodes_assigns())
+      |> Map.merge(partials_assigns())
+      |> Map.put_new(:title, "Griffin")
 
     output =
       GriffinSSG.render(
@@ -370,7 +549,15 @@ defmodule Mix.Tasks.Grf.Build do
     Application.get_env(:griffin_ssg, key, default)
   end
 
-  defp filters() do
+  defp partials_assigns() do
+    :griffin_build_layouts
+    |> :ets.lookup(:__partials__)
+    |> then(fn [{:__partials__, partials}] ->
+      %{partials: partials}
+    end)
+  end
+
+  defp filters_assigns() do
     Map.merge(default_filters(), get_app_env(:filters, %{}))
   end
 
@@ -381,7 +568,7 @@ defmodule Mix.Tasks.Grf.Build do
     }
   end
 
-  defp shortcodes() do
+  defp shortcodes_assigns() do
     Map.merge(default_shortcodes(), get_app_env(:shortcodes, %{}))
   end
 

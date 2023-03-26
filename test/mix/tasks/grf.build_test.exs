@@ -65,6 +65,7 @@ defmodule Grf.BuildTest do
     end)
   end
 
+  # TODO test shortcode that references another shortcode
   @input_path "shortcodes_input"
   @output_path "shortcodes_output"
   test "shortcodes can be used in layouts correctly" do
