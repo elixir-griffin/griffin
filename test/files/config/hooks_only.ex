@@ -1,6 +1,4 @@
-import Config
-
-config :griffin_ssg,
+%{
   hooks: %{
     before: [
       fn ->
@@ -15,3 +13,4 @@ config :griffin_ssg,
       end
     ]
   }
+}

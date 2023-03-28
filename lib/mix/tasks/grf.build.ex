@@ -208,7 +208,8 @@ defmodule Mix.Tasks.Grf.Build do
     :output,
     :layouts,
     :passthrough_copies,
-    :ignore
+    :ignore,
+    :config
   ]
 
   @default_opts %{
@@ -216,7 +217,11 @@ defmodule Mix.Tasks.Grf.Build do
     output: "_site",
     layouts: "#{File.cwd!()}/lib/layouts",
     passthrough_copies: [],
-    ignore: []
+    ignore: [],
+    hooks: %{
+      before: [],
+      after: []
+    }
   }
 
   @switches [
@@ -229,7 +234,9 @@ defmodule Mix.Tasks.Grf.Build do
     # passthrough copies (comma separated)
     passthrough_copies: :string,
     # ignore files (comma separated)
-    ignore: :string
+    ignore: :string,
+    # path to config file (to be passed into Code.eval_file)
+    config: :string
   ]
 
   @aliases [
@@ -239,123 +246,120 @@ defmodule Mix.Tasks.Grf.Build do
 
   @impl Mix.Task
   def run(args, _test_opts \\ []) do
-    {opts, _parsed} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
-
-    # Configuration hierarchy:
-    # Environment Variables > Command Line Arguments > Application Config > Defaults
-
-    opts =
-      @default_opts
-      |> Map.merge(application_config())
-      |> Map.merge(Enum.into(opts, %{}))
-      |> Map.merge(environment_config())
-
-    input_path = opts.input
-    output_path = opts.output
-
-    default_hooks = %{
-      before: [],
-      after: []
-    }
-
-    # Call before hooks
-    for hook <- get_app_env(:hooks, default_hooks).before do
-      hook.()
-    end
-
-    # Passthrough copy files are passed in as a comma separated string of values
-    # while in the configuration they are read as a standard Elixir list
-    passthrough_copy_args =
-      if is_binary(opts.passthrough_copies) do
-        String.split(opts.passthrough_copies, ",")
-      else
-        opts.passthrough_copies
-      end
-
-    for arg <- passthrough_copy_args do
-      arg
-      |> Path.wildcard()
-      |> Enum.map(fn path ->
-        # e.g. file 'a/b/c/d.js' will be copied to '<output_dir>/a/b/c/d.js'
-        if File.dir?(path) do
-          File.mkdir_p(output_path <> "/" <> path)
-        else
-          File.mkdir_p(output_path <> "/" <> Path.dirname(path))
-          :ok = File.cp(path, output_path <> "/" <> path)
-        end
-      end)
-    end
-
-    # Ignore files are passed in as a comma separated string of values
-    # while in the configuration they are read as a standard Elixir list
-    ignore_args =
-      if is_binary(opts.passthrough_copies) do
-        String.split(opts.passthrough_copies, ",")
-      else
-        opts.passthrough_copies
-      end
-
-    ignore_files =
-      for arg <- ignore_args do
-        arg
-        |> Path.wildcard()
-        |> Enum.filter(fn path ->
-          not File.dir?(path)
-        end)
-      end
-
-    files = get_workable_files(input_path) -- ignore_files
-
-    # Compile layouts and partials and store them in ETS
-
-    try do
-      :ets.new(:griffin_build_layouts, [:ordered_set, :public, :named_table])
-    rescue
-      ArgumentError ->
-        :ok
-    end
-
-    layouts_dir = opts.layouts
-    layout_files = get_layout_files(layouts_dir)
-    num_layouts = length(layout_files)
-
-    # compile layout files
-    Enum.map(layout_files, &compile_layout/1)
-
-    partial_layouts = get_partial_layout_files(layouts_dir)
-    num_partials = length(partial_layouts)
-
-    # compile partials
-    partials =
-      try do
-        Enum.reduce(partial_layouts, %{}, fn filepath, acc ->
-          Map.put(
-            acc,
-            String.to_atom(Path.basename(filepath, Path.extname(filepath))),
-            EEx.compile_file(filepath)
-          )
-        end)
-      rescue
-        Enum.EmptyError ->
-          %{}
-      end
-
-    :ets.insert(:griffin_build_layouts, {:__partials__, partials})
-
-    print_compiled_layouts(num_layouts, num_partials)
-
-    # compile fallback layout
-    :ets.insert(
-      :griffin_build_layouts,
-      {"__fallback__", EEx.compile_string(fallback_html_layout())}
-    )
-
-    # Mix.shell().info("workable files #{get_workable_files(input_path)}")
-
-    # Mix.shell().info("workable layouts #{get_layout_files(input_path)}")
-
     {time_in_microseconds, response} =
       :timer.tc(fn ->
+        {opts, _parsed} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
+
+        # Configuration hierarchy:
+        # Environment Variables > Command Line Arguments >
+        # > Config File > Application Config > Defaults
+
+        opts =
+          @default_opts
+          |> Map.merge(application_config())
+          |> Map.merge(file_config(opts[:config]))
+          |> Map.merge(Enum.into(opts, %{}))
+          |> Map.merge(environment_config())
+
+        input_path = opts.input
+        output_path = opts.output
+
+        # Call before hooks
+        for hook <- opts.hooks.before do
+          hook.()
+        end
+
+        # Passthrough copy files are passed in as a comma separated string of values
+        # while in the configuration they are read as a standard Elixir list
+        passthrough_copy_args =
+          if is_binary(opts.passthrough_copies) do
+            String.split(opts.passthrough_copies, ",")
+          else
+            opts.passthrough_copies
+          end
+
+        passthrough_copy_args
+        |> Enum.flat_map(fn arg ->
+          arg
+          |> Path.wildcard()
+          |> Enum.map(fn path ->
+            # e.g. file 'a/b/c/d.js' will be copied to '<output_dir>/a/b/c/d.js'
+            unless File.dir?(path) do
+              File.mkdir_p(output_path <> "/" <> Path.dirname(path))
+              :ok = File.cp(path, output_path <> "/" <> path)
+            end
+          end)
+        end)
+
+        # Ignore files are passed in as a comma separated string of values
+        # while in the configuration they are read as a standard Elixir list
+        ignore_args =
+          if is_binary(opts.ignore) do
+            String.split(opts.ignore, ",")
+          else
+            opts.ignore
+          end
+
+        ignore_files =
+          ignore_args
+          |> Enum.flat_map(fn arg ->
+            arg
+            |> Path.wildcard()
+            |> Enum.filter(fn path ->
+              not File.dir?(path)
+            end)
+          end)
+
+        files = get_workable_files(input_path) -- ignore_files
+
+        # Compile layouts and partials and store them in ETS
+
+        try do
+          :ets.new(:griffin_build_layouts, [:ordered_set, :public, :named_table])
+        rescue
+          ArgumentError ->
+            :ok
+        end
+
+        layouts_dir = opts.layouts
+        layout_files = get_layout_files(layouts_dir)
+        num_layouts = length(layout_files)
+
+        # compile layout files
+        Enum.map(layout_files, &compile_layout/1)
+
+        partial_layouts = get_partial_layout_files(layouts_dir)
+        num_partials = length(partial_layouts)
+
+        # compile partials
+        partials =
+          try do
+            Enum.reduce(partial_layouts, %{}, fn filepath, acc ->
+              Map.put(
+                acc,
+                String.to_atom(Path.basename(filepath, Path.extname(filepath))),
+                EEx.compile_file(filepath)
+              )
+            end)
+          rescue
+            Enum.EmptyError ->
+              %{}
+          end
+
+        :ets.insert(:griffin_build_layouts, {:__partials__, partials})
+
+        print_compiled_layouts(num_layouts, num_partials)
+
+        # compile fallback layout
+        :ets.insert(
+          :griffin_build_layouts,
+          {"__fallback__", EEx.compile_string(fallback_html_layout())}
+        )
+
+        # Mix.shell().info("workable files #{get_workable_files(input_path)}")
+
+        # Mix.shell().info("workable layouts #{get_layout_files(input_path)}")
+
         tasks =
           for file <- files do
             Task.async(fn ->
@@ -397,15 +401,18 @@ defmodule Mix.Tasks.Grf.Build do
             end)
           end
 
-        for task <- tasks do
-          Task.await(task, :infinity)
-        end
-      end)
+        response =
+          for task <- tasks do
+            Task.await(task, :infinity)
+          end
 
-    # Call before hooks
-    for hook <- get_app_env(:hooks, default_hooks).after do
-      hook.()
-    end
+        # Call after hooks
+        for hook <- opts.hooks.after do
+          hook.()
+        end
+
+        response
+      end)
 
     files_written = length(response)
     time_elapsed = :erlang.float_to_binary(time_in_microseconds / 1_000_000, decimals: 2)
@@ -435,9 +442,7 @@ defmodule Mix.Tasks.Grf.Build do
     end
 
     {:ok, %{front_matter: frontmatter, content: content}} =
-      input_path
-      |> File.read!()
-      |> GriffinSSG.parse()
+      parse_result
 
     # create full directory path
     file_directory = output_path
@@ -528,6 +533,18 @@ defmodule Mix.Tasks.Grf.Build do
     |> Enum.map(fn option -> {option, get_app_env(option)} end)
     |> Enum.into(%{})
     |> Map.filter(fn {_, v} -> not is_nil(v) end)
+  end
+
+  defp file_config(nil), do: %{}
+
+  defp file_config(config_file) do
+    {config, _} = Code.eval_file(config_file)
+
+    if is_map(config) do
+      config
+    else
+      %{}
+    end
   end
 
   defp environment_config do
