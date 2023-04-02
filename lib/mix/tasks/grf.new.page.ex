@@ -6,37 +6,52 @@ defmodule Mix.Tasks.Grf.New.Page do
   @moduledoc """
   Generates a new Markdown page with relevant front matter attributes.
 
-      $ mix grf.gen.page PATH [--title TITLE]
+      $ mix grf.gen.page [--title TITLE] [--draft] PATH
 
   A Markdown file will be created with the name at the specified path
   with the default metadata fields: `title`, `date` and `draft`.
 
   ## Options
-    * `--title` - the page title.
-      Defaults to `_site`
+    * `--title` - the title parameter in the frontmatter.
+      Defaults to the filename.
+
+    * `--draft` - marks the file as a draft in the frontmatter.
   """
 
-  @impl Mix.Task
-  def run([name]) do
-    title = name
-    current_date = DateTime.utc_now() |> DateTime.to_iso8601()
-    directory = Path.expand(name) |> Path.dirname()
-    File.mkdir_p!(directory)
+  @switches [
+    title: :string,
+    draft: :boolean
+  ]
 
-    File.write!(Path.expand("./#{name}"), """
+  @impl Mix.Task
+  def run(args) do
+    {opts, path} = OptionParser.parse!(args, strict: @switches)
+
+    opts = Enum.into(opts, %{})
+
+    path
+    |> Path.expand()
+    |> Path.dirname()
+    |> File.mkdir_p!()
+
+    title = opts[:title] || path
+    draft = opts[:draft] || false
+    date = DateTime.utc_now() |> DateTime.to_iso8601()
+
+    File.write!(Path.expand("./#{path}"), """
     ---
     title: "#{title}"
-    date: "#{current_date}"
-    draft: true
+    date: "#{date}"
+    draft: #{draft}
     ---
     """)
 
-    Mix.shell().info("* creating #{name}")
+    Mix.shell().info("* creating #{path}")
   end
 
-  def run(_) do
-    Mix.raise(
-      "Unprocessable arguments, please use `mix help grf.gen.page` for documentation on correct usage"
-    )
-  end
+  # def run(_) do
+  #   Mix.raise(
+  #     "Unprocessable arguments, please use `mix help grf.gen.page` for documentation on correct usage"
+  #   )
+  # end
 end

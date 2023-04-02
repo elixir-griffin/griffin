@@ -2,46 +2,59 @@ defmodule Mix.Tasks.Grf.Build do
   @shortdoc "Generates a static website with Griffin"
 
   @moduledoc """
-  Generates a Griffin static site from existing template files
+  Generates a static website from template and layout files.
 
-      $ mix grf.build
+      $ mix grf.build [--input INPUT] [--output OUTPUT]
 
-  ## Input directory
+  Template and layout files will be read from INPUT directory and sub-folders,
+  and output generated content to the OUTPUT directory.
 
-  Griffin searches for Markdown files in the input directory,
-  which defaults to the `src` directory.
-  This can be configured with the `-in` or `--input` option.
+  ## Options
 
-  ## Output directory
+    * `-in`, `--input` - the path to the input directory. Defaults to `src`.
 
-  The output directory is where Griffin writes HTML files to.
-  It defaults to `_site` and can be configured with the `-out` or `--output`
-  option.
+    * `-out`, `--output` - the directory where Griffin will write files to.
+      Defaults to `_site`
 
-  ## Layouts directory
+    * `--layouts` - the directory where the layout and partials files are kept.
+      Defaults to `lib/layouts`.
 
-  Griffin reads all layouts and partials from the same directory,
-  which defaults to `lib/layouts`. The partials directory is assumed to be
-  a subdirectory of the layouts directory (e.g. `lib/layout/partials`).
-  This directory can be changed with the `--layouts` option.
+    * `--passthrough-copies` - comma separated list of directories or files to
+      copy directly to the output directory without processing.
+      Supports wildcard paths using `Path.wildcard/1` Useful for assets files.
+
+    * `--ignore` - comma separated list of directories or files to ignore
+      inside the input directory.
+
+    * `--config` - the path to the configuration file
+
+    * `--dry-run` - disables writing to the file system.
+      Useful for tests and debugging.
+
+    * `--quiet` - print minimal console output
+
+    * `--debug` - print additional debug information
+
+
 
   ## Passthrough copy
 
   Passthrough copy files are files that shouldn't be processed but simply
   copied over to the output directory. This is useful for assets like images,
-  fonts, javascript and css.
+  fonts, JavaScript and CSS.
   A list of comma separated file or wildcard paths may be provided via the
   `--passthrough-copies` option. Here's an example:
 
-      $ mix grf.build --passthrough-copies=assets/js/*,fonts/*,images/*.png
+      $ mix grf.build --passthrough-copies=assets/js,fonts,images/*.{png,jpeg}
 
-  This command will copy all files in the `assets/js`, `fonts`,
-  and all PNG images in the `images` directory over to the same path relative
+  This command will copy all files in the `assets/js`, `fonts` and all PNG
+  and JPEG images in the `images` directory over to the same path relative
   to the output directory. In the above example and assuming the default
   `_site` output directory, Griffin would copy files to `_site/assets/js`,
   `_site/fonts` and `_site/images` directories, respectively.
-  A single assets directory can be copied with subdirectories included with a
-  wildcard such as `assets/**`
+  Wildcard paths are expanded by `Path.wildcard/1` and thus all options that
+  it supports can be used to build wildcard paths.
+
 
   > #### About passthrough copy paths {: .neutral}
   >
@@ -59,15 +72,55 @@ defmodule Mix.Tasks.Grf.Build do
 
   Here's an example:
 
-      $ mix grf.build --ignore=src/posts/drafts/*,src/README.md
+      $ mix grf.build --ignore=src/posts/drafts,src/README.md
 
   This command will ignore all input files from the `src/posts/drafts`
   directory along with the `src/README.md` file.
+  Wildcard paths are expanded by `Path.wildcard/1` and thus all options that
+  it supports can be used to build wildcard paths.
 
-  > #### About ignore file paths {: .neutral}
+  The paths mentioned in this option are not relative to the input
+  directory, and instead are relative to the root of the Griffin project.
+
+  > #### Default ignores {: .neutral}
   >
-  > The paths mentioned in this option are not relative to the input
-  > directory, and instead are relative to the root of the Griffin project.
+  > By default Griffin imports the ignores from your `.gitignore` file.
+
+
+  ## Quiet option
+
+  Griffin prints out information about files that it processed, including the
+  rendering engine that processed the file (only `earmark` for now). For large
+  projects or other instances where users need minimal console output, there is
+  the `--quiet` option.
+
+
+  ## Config file
+
+  Griffin allows passing in ad-hoc configuration files through the `--config`
+  option. This option accepts a path to a file that is then piped into
+  `Code.eval_file/2`. Although this file can contain any Elixir code, it is
+  expected to return a map with the same configuration keys as those used by
+  Application environment. Here's an example `config.ex` file that returns a
+  valid Griffin config:
+
+  ```
+  %{
+    # any other config key could be set here
+    input: "custom_input_dir",
+    output: "custom_output_dir"
+  }
+  ```
+
+  This option simplifies configuration since it doesn't rely on Application
+  environment, and it allows for better testing.
+
+
+  ## Dry run
+
+  If you're debugging an issue or just want to test Griffin out, you can use
+  the `--dry-run` option to run Griffin without writing to the file system.
+
 
   ## Other options
 
@@ -197,46 +250,50 @@ defmodule Mix.Tasks.Grf.Build do
 
   @version Mix.Project.config()[:version]
 
-  @extensions [
-    # markdown
-    ".md",
-    ".markdown"
-  ]
-
   @all_options [
     :input,
     :output,
     :layouts,
     :passthrough_copies,
     :ignore,
-    :config
+    :config,
+    :quiet,
+    :dry_run,
+    :debug
   ]
 
   @default_opts %{
     input: "src",
     output: "_site",
-    layouts: "#{File.cwd!()}/lib/layouts",
+    layouts: "lib/layouts",
     passthrough_copies: [],
     ignore: [],
     hooks: %{
       before: [],
       after: []
-    }
+    },
+    quiet: false,
+    dry_run: false,
+    # in the future we might support `:watch` and `:serve`
+    run_mode: :build,
+    # in the future we might support `:json`
+    output_mode: :file_system,
+    debug: false
   }
 
   @switches [
-    # input directory
     input: :string,
-    # output directory
     output: :string,
-    # layouts directory
     layouts: :string,
     # passthrough copies (comma separated)
     passthrough_copies: :string,
     # ignore files (comma separated)
     ignore: :string,
     # path to config file (to be passed into Code.eval_file)
-    config: :string
+    config: :string,
+    quiet: :boolean,
+    dry_run: :boolean,
+    debug: :boolean
   ]
 
   @aliases [
@@ -244,9 +301,12 @@ defmodule Mix.Tasks.Grf.Build do
     out: :output
   ]
 
+  @input_extnames [".md", ".markdown"]
+  @layout_extnames [".eex"]
+
   @impl Mix.Task
   def run(args, _test_opts \\ []) do
-    {time_in_microseconds, response} =
+    {time_in_microseconds, files_written} =
       :timer.tc(fn ->
         {opts, _parsed} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
 
@@ -261,160 +321,75 @@ defmodule Mix.Tasks.Grf.Build do
           |> Map.merge(Enum.into(opts, %{}))
           |> Map.merge(environment_config())
 
-        input_path = opts.input
-        output_path = opts.output
+        directories = %{
+          input: opts.input,
+          output: opts.output,
+          layouts: opts.layouts,
+          partials: opts.layouts <> "/partials"
+          # missing data dir
+        }
 
         # Call before hooks
         for hook <- opts.hooks.before do
-          hook.()
+          hook.({directories, opts.run_mode, opts.output_mode})
         end
 
-        # Passthrough copy files are passed in as a comma separated string of values
-        # while in the configuration they are read as a standard Elixir list
-        passthrough_copy_args =
-          if is_binary(opts.passthrough_copies) do
-            String.split(opts.passthrough_copies, ",")
-          else
-            opts.passthrough_copies
-          end
+        copy_passthrough_files!(opts)
 
-        passthrough_copy_args
-        |> Enum.flat_map(fn arg ->
-          arg
-          |> Path.wildcard()
-          |> Enum.map(fn path ->
-            # e.g. file 'a/b/c/d.js' will be copied to '<output_dir>/a/b/c/d.js'
-            unless File.dir?(path) do
-              File.mkdir_p(output_path <> "/" <> Path.dirname(path))
-              :ok = File.cp(path, output_path <> "/" <> path)
-            end
-          end)
-        end)
+        compile_layouts!(opts)
 
-        # Ignore files are passed in as a comma separated string of values
-        # while in the configuration they are read as a standard Elixir list
-        ignore_args =
-          if is_binary(opts.ignore) do
-            String.split(opts.ignore, ",")
-          else
-            opts.ignore
-          end
+        # TODO for implementing collections:
+        # we already have a list of all the file paths at this stage.
+        # we can parse every file and keep it somewhere for caching
+        # on each file check for tag field in front_matter
+        # if present, add file to opts.collections.<tag>
 
+        # subtract ignore files from files list
         ignore_files =
-          ignore_args
-          |> Enum.flat_map(fn arg ->
-            arg
-            |> Path.wildcard()
-            |> Enum.filter(fn path ->
-              not File.dir?(path)
-            end)
-          end)
+          opts.ignore
+          |> maybe_parse_csv()
+          |> Enum.flat_map(&GriffinFs.list_all(&1))
+          |> Enum.concat(GriffinFs.git_ignores())
 
-        files = get_workable_files(input_path) -- ignore_files
+        files = GriffinFs.search_directory(opts.input, @input_extnames) -- ignore_files
 
-        # Compile layouts and partials and store them in ETS
-
-        try do
-          :ets.new(:griffin_build_layouts, [:ordered_set, :public, :named_table])
-        rescue
-          ArgumentError ->
-            :ok
-        end
-
-        layouts_dir = opts.layouts
-        layout_files = get_layout_files(layouts_dir)
-        num_layouts = length(layout_files)
-
-        # compile layout files
-        Enum.map(layout_files, &compile_layout/1)
-
-        partial_layouts = get_partial_layout_files(layouts_dir)
-        num_partials = length(partial_layouts)
-
-        # compile partials
-        partials =
-          try do
-            Enum.reduce(partial_layouts, %{}, fn filepath, acc ->
-              Map.put(
-                acc,
-                String.to_atom(Path.basename(filepath, Path.extname(filepath))),
-                EEx.compile_file(filepath)
-              )
-            end)
-          rescue
-            Enum.EmptyError ->
-              %{}
-          end
-
-        :ets.insert(:griffin_build_layouts, {:__partials__, partials})
-
-        print_compiled_layouts(num_layouts, num_partials)
-
-        # compile fallback layout
-        :ets.insert(
-          :griffin_build_layouts,
-          {"__fallback__", EEx.compile_string(fallback_html_layout())}
-        )
-
-        # Mix.shell().info("workable files #{get_workable_files(input_path)}")
-
-        # Mix.shell().info("workable layouts #{get_layout_files(input_path)}")
+        # the first stage parses all files, returning metadata that will be used
+        # to build collections, which needs to be done before any file is actually
+        # rendered
 
         tasks =
           for file <- files do
-            Task.async(fn ->
-              file_path = file
-              extname = Path.extname(file)
-              global_input_dir = input_path
-              global_output_dir = output_path
-
-              # TODO switch to parsing every file before rendering them out
-              # this will be useful to generate collections and to add useful keys
-              # like URL and others as keys to the layout
-              # (e.g. being able to do refer @url within the layout)
-              {:ok, %{front_matter: front_matter}} = GriffinSSG.parse(File.read!(file))
-
-              file_output_path =
-                if Map.has_key?(front_matter, :permalink) do
-                  global_output_dir <> "/" <> front_matter.permalink
-                else
-                  path_basename =
-                    if Path.basename(file, extname) == "index" do
-                      ""
-                    else
-                      "/" <> Path.basename(file, extname)
-                    end
-
-                  path_relative_to_input_dir =
-                    case String.split(Path.dirname(file_path), global_input_dir) do
-                      ["", ""] ->
-                        ""
-
-                      ["", "/" <> path_relative_to_input_dir] ->
-                        "/" <> path_relative_to_input_dir
-                    end
-
-                  global_output_dir <> path_relative_to_input_dir <> path_basename
-                end
-
-              generate_file(file_path, file_output_path, Path.extname(file))
-            end)
+            Task.async(__MODULE__, :parse_file, [file, opts])
           end
 
-        response =
+        parsed_files =
+          for task <- tasks do
+            Task.await(task, :infinity)
+          end
+
+        collections = compile_collections(parsed_files, opts)
+
+        opts = Map.put(opts, :collections, collections)
+
+        tasks =
+          for metadata <- parsed_files do
+            # TODO we're passing in too much data here inside collections
+            Task.async(__MODULE__, :render_file, [metadata.output, metadata, opts])
+          end
+
+        results =
           for task <- tasks do
             Task.await(task, :infinity)
           end
 
         # Call after hooks
         for hook <- opts.hooks.after do
-          hook.()
+          hook.({directories, results, opts.run_mode, opts.output_mode})
         end
 
-        response
+        length(results)
       end)
 
-    files_written = length(response)
     time_elapsed = :erlang.float_to_binary(time_in_microseconds / 1_000_000, decimals: 2)
 
     time_per_file =
@@ -429,96 +404,212 @@ defmodule Mix.Tasks.Grf.Build do
     )
   end
 
-  defp generate_file(input_path, output_path, extname) do
-    Mix.shell().info("reading: #{input_path}")
+  @doc false
+  def parse_file(file, config) do
+    output_path = config.output
+    input_path = config.input
 
-    parse_result =
-      input_path
-      |> File.read!()
-      |> GriffinSSG.parse()
+    {:ok, %{front_matter: front_matter, content: content}} = GriffinSSG.parse(File.read!(file))
 
-    if {:error, :parsing_front_matter_failed} == parse_result do
-      Mix.raise("File parsing failed for file #{input_path}")
-    end
+    file_output_path =
+      if Map.has_key?(front_matter, :permalink) do
+        output_path <> "/" <> front_matter.permalink <> "/index.html"
+      else
+        GriffinFs.output_filepath(file, input_path, output_path)
+      end
 
-    {:ok, %{front_matter: frontmatter, content: content}} =
-      parse_result
+    url =
+      file_output_path
+      |> String.trim_leading(output_path)
+      |> String.trim_trailing("index.html")
 
-    # create full directory path
-    file_directory = output_path
+    # TODO if date = "last modified" in front matter
+    # add File.stat!(file, time: :posix).mtime to data
 
-    Mix.shell().info("creating path: #{file_directory}")
+    data =
+      front_matter
+      |> Map.put(:url, url)
 
-    file_directory
-    |> Path.expand()
-    |> File.mkdir_p()
+    date =
+      front_matter
+      |> Map.get_lazy(:date, fn ->
+        timestamp = File.stat!(file, time: :posix).ctime
 
-    file_path = "#{file_directory}/index.html"
+        timestamp
+        |> DateTime.from_unix!()
+        |> DateTime.to_iso8601()
+      end)
 
-    Mix.shell().info("writing: #{file_path} from #{input_path} (#{extension_parser(extname)})")
+    %{
+      page: %{
+        url: url,
+        input_path: file,
+        output_path: file_output_path,
+        date: date
+      },
+      data: data,
+      content: content,
+      input: file,
+      output: file_output_path
+    }
+  end
 
-    frontmatter = frontmatter || %{}
-
-    layout_name = Map.get(frontmatter, :layout, "__fallback__")
+  @doc false
+  def render_file(
+        file,
+        %{
+          page: page,
+          data: data,
+          content: content,
+          input: input_path
+        },
+        opts
+      ) do
+    layout_name = Map.get(data, :layout, "__fallback__")
 
     layout =
       :griffin_build_layouts
       |> :ets.lookup(layout_name)
-      |> then(fn [{^layout_name, layout}] -> layout end)
+      |> then(fn lookup_result ->
+        case lookup_result do
+          [] -> Mix.raise("No layout with name #{layout_name} was found when rendering `#{file}`")
+          [{^layout_name, layout}] -> layout
+        end
+      end)
 
     layout_assigns =
       filters_assigns()
       |> Map.merge(shortcodes_assigns())
       |> Map.merge(partials_assigns())
+      |> Map.merge(%{page: page, collections: opts.collections})
+      |> Map.merge(data)
       |> Map.put_new(:title, "Griffin")
 
     output =
       GriffinSSG.render(
         layout,
         %{
-          front_matter: frontmatter,
           content: content,
           assigns: layout_assigns
         }
       )
 
-    File.write!(file_path, output)
+    unless opts.quiet do
+      Mix.shell().info("writing: #{file} from #{input_path} (markdown)")
+    end
 
-    try do
-    rescue
-      MatchError ->
-        # file parsing failed
-        Mix.raise("File parsing failed for file #{input_path}")
+    unless opts.dry_run do
+      file
+      |> Path.dirname()
+      |> Path.expand()
+      |> File.mkdir_p()
+
+      File.write!(file, output)
+    end
+
+    output
+  end
+
+  defp copy_passthrough_files!(opts) do
+    unless opts.dry_run do
+      opts.passthrough_copies
+      |> maybe_parse_csv()
+      |> Enum.flat_map(&GriffinFs.list_all(&1))
+      |> Enum.map(fn path ->
+        # e.g. file 'a/b/c/d.js' will be copied to '<output_dir>/a/b/c/d.js'
+        File.mkdir_p!(opts.output <> "/" <> Path.dirname(path))
+        File.cp!(path, opts.output <> "/" <> path)
+      end)
     end
   end
 
-  defp print_compiled_layouts(num_layouts, num_partials) do
-    Mix.shell().info(
-      "Compiled #{num_layouts + num_partials} layouts (#{num_partials} partial#{unless num_partials == 1, do: "s"})"
+  defp compile_layouts!(opts) do
+    try do
+      :ets.new(:griffin_build_layouts, [:ordered_set, :public, :named_table])
+    rescue
+      ArgumentError ->
+        :ok
+    end
+
+    layouts_dir = opts.layouts
+    layout_partials_dir = layouts_dir <> "/partials"
+
+    layout_files = GriffinFs.search_directory(layouts_dir, @layout_extnames)
+    num_layouts = length(layout_files)
+
+    Enum.map(layout_files, &compile_layout/1)
+
+    partial_layouts = GriffinFs.search_directory(layout_partials_dir, @layout_extnames)
+    num_partials = length(partial_layouts)
+
+    # compile partials
+    partials =
+      try do
+        Enum.reduce(partial_layouts, %{}, fn filepath, acc ->
+          Map.put(
+            acc,
+            String.to_atom(Path.basename(filepath, Path.extname(filepath))),
+            EEx.compile_file(filepath)
+          )
+        end)
+      rescue
+        Enum.EmptyError ->
+          %{}
+      end
+
+    :ets.insert(:griffin_build_layouts, {:__partials__, partials})
+
+    unless opts.quiet do
+      Mix.shell().info(
+        "Compiled #{num_layouts + num_partials} layouts (#{num_partials} partial#{unless num_partials == 1, do: "s"})"
+      )
+    end
+
+    # compile fallback layout
+    :ets.insert(
+      :griffin_build_layouts,
+      {"__fallback__", EEx.compile_string(fallback_html_layout())}
     )
   end
 
-  defp extension_parser(ext) when ext in [".md", ".markdown"] do
-    "markdown"
-  end
+  defp compile_collections(parsed_files, opts) do
+    collections =
+      parsed_files
+      |> Enum.filter(fn metadata ->
+        metadata.data[:tags] != nil
+      end)
+      |> Enum.reduce(%{}, fn metadata, acc ->
+        metadata_tags = metadata.data.tags
 
-  defp get_workable_files(input_path, extensions \\ @extensions) do
-    Path.wildcard("#{input_path}/**/*.*", match_dot: false)
-    |> Enum.filter(&(not String.starts_with?(&1, ["_"])))
-    # |> Enum.map(&Path.expand/1)
-    |> Enum.filter(&(Path.extname(&1) in extensions))
-  end
+        tags =
+          if is_list(metadata_tags) do
+            metadata_tags
+          else
+            # single tag
+            [metadata_tags]
+          end
 
-  defp get_layout_files(path, extensions \\ [".eex"]) do
-    Path.wildcard("#{path}/*.*", match_dot: false)
-    |> Enum.filter(&(not String.starts_with?(&1, ["_"])))
-    |> Enum.filter(&(Path.extname(&1) in extensions))
-  end
+        Enum.reduce(tags, acc, fn tag, current_tags ->
+          Map.update(current_tags, String.to_atom(tag), [metadata], fn list_files ->
+            [metadata | list_files]
+          end)
+        end)
+      end)
 
-  defp get_partial_layout_files(path, extensions \\ [".eex"]) do
-    Path.wildcard("#{path}/partials/*.*", match_dot: false)
-    |> Enum.filter(&(not String.starts_with?(&1, ["_"])))
-    |> Enum.filter(&(Path.extname(&1) in extensions))
+    if opts.debug do
+      Mix.shell().info("Collections: #{Enum.join(Map.keys(collections), ", ")}")
+
+      for {tag, files} <- collections do
+        files_pretty_print =
+          files
+          |> Enum.map(fn metadata -> metadata.input end)
+          |> Enum.join(",")
+
+        Mix.shell().info("Collection #{tag}: #{files_pretty_print}")
+      end
+    end
+
+    collections
   end
 
   defp compile_layout(filepath) do
@@ -527,6 +618,12 @@ defmodule Mix.Tasks.Grf.Build do
       {Path.basename(filepath, Path.extname(filepath)), EEx.compile_file(filepath)}
     )
   end
+
+  defp maybe_parse_csv(value) when is_binary(value) do
+    String.split(value, ",")
+  end
+
+  defp maybe_parse_csv(value), do: value
 
   defp application_config do
     @all_options

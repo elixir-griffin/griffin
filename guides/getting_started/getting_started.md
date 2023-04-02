@@ -28,7 +28,7 @@ Edit the `mix.exs` file to include `griffin_ssg` as part of your dependencies:
     [
       # add the following line
       # to your list of dependencies
-      {:griffin_ssg, "~> 0,2"},
+      {:griffin_ssg, "~> 0.3"},
     ]
   end
 ```
@@ -77,8 +77,8 @@ mix grf.build
 The output may look like this:
 ```console
 ~/blog $ mix grf.build
-Writing _site/README/index.html from ./README.md (liquid)
-Writing _site/index.html from ./index.html (liquid)
+Writing _site/README/index.html from ./README.md (earmark)
+Writing _site/index.html from ./index.html (earmark)
 Wrote 2 files in 0.06 seconds (v0.2.0)
 ```
 

@@ -1,7 +1,7 @@
 defmodule GriffinSSGApp do
   use Application
 
-  @default_port "4004"
+  @default_port "4123"
 
   @doc false
   def start(_type, _args) do

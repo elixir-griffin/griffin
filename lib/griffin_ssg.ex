@@ -33,14 +33,12 @@ defmodule GriffinSSG do
   `Code.eval_quoted/2` on the layout will generate a correct result.
   """
   def render(layout, options) do
-    front_matter = Map.fetch!(options, :front_matter)
     content = Map.fetch!(options, :content)
     assigns = Map.get(options, :assigns, %{})
 
     flat_assigns =
-      front_matter
+      assigns
       |> Map.put(:content, content)
-      |> Map.merge(assigns)
       # here we're compiling all existing partials when we might only need a very small subset.
       # TODO compile only required partials by looking at args in the quoted expression
       |> then(fn current_assigns ->
