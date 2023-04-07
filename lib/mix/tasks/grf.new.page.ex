@@ -30,7 +30,6 @@ defmodule Mix.Tasks.Grf.New.Page do
     opts = Enum.into(opts, %{})
 
     path
-    |> Path.expand()
     |> Path.dirname()
     |> File.mkdir_p!()
 
@@ -38,7 +37,7 @@ defmodule Mix.Tasks.Grf.New.Page do
     draft = opts[:draft] || false
     date = DateTime.utc_now() |> DateTime.to_iso8601()
 
-    File.write!(Path.expand("./#{path}"), """
+    File.write!(path, """
     ---
     title: "#{title}"
     date: "#{date}"
