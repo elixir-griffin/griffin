@@ -1,11 +1,11 @@
-# Getting Started
+# Quick Start
 Griffin requires Elixir version 1.14 or higher.
 
 You can check if you have Elixir installed by running `iex --version` from a terminal. If the command is not found, you will need to [download and install Elixir](https://elixir-lang.org/install.html) before moving on.
 
 <!-- TODO record screencast building a simple website and put it here -->
 
-## 1. Create a new Elixir project
+### 1. Create a new Elixir project
 
 Create a new project using `mix new`:
 
@@ -19,7 +19,7 @@ Now move into that directory with the `cd` command:
 cd blog
 ```
 
-## 2. Add Griffin as a dependency
+### 2. Add Griffin as a dependency
 
 Edit the `mix.exs` file to include `griffin_ssg` as part of your dependencies:
 
@@ -33,11 +33,11 @@ Edit the `mix.exs` file to include `griffin_ssg` as part of your dependencies:
   end
 ```
 
-### Fetch and install Griffin
+#### Fetch and install Griffin
 
 Run `mix deps.get` to fetch and install Griffin.
 
-## 3. Run Griffin
+### 3. Run Griffin
 
 Let's use one of Griffin's scripts to test that the installation is working:
 
@@ -49,12 +49,12 @@ Here's what the terminal might look like after you've run this command:
 
 ```console
 ~/blog $ mix grf.build
-Wrote 0 files in 0.03 seconds (v0.2.0)
+Wrote 0 files in 0.03 seconds (v0.3.0)
 ```
 
-If you see `(v0.2.0)` that means you're running the latest version of Griffin. Note that Griffin didn't process any files -- this was expected, since we've not added templates yet.
+If you see `(v0.3.0)` that means you're running the latest version of Griffin. Note that Griffin didn't process any files -- this was expected, since we've not added templates yet.
 
-## 4. Create some templates
+### 4. Create some templates
 A *template* is a content file written in a format such as Markdown, HTML or Liquid, which Griffin transforms into one or more pages when building our website.
 
 Let's create a couple of templates with the following commands:
@@ -79,12 +79,12 @@ The output may look like this:
 ~/blog $ mix grf.build
 Writing _site/README/index.html from ./README.md (earmark)
 Writing _site/index.html from ./index.html (earmark)
-Wrote 2 files in 0.06 seconds (v0.2.0)
+Wrote 2 files in 0.06 seconds (v0.3.0)
 ```
 
 We’ve compiled our two content templates in the current directory into the output folder (`_site` is the default).
 
-## 5. See the results
+### 5. See the results
 Let's use a different Griffin script to spin up a local HTTP server:
 
 ```console

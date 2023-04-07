@@ -23,6 +23,7 @@ defmodule Griffin.MixProject do
   end
 
   defp elixirc_paths(:docs), do: ["lib", "installer/lib"]
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
   # Run "mix help compile.app" to learn about applications.
@@ -52,8 +53,9 @@ defmodule Griffin.MixProject do
       {:earmark, "~> 1.4"},
       {:plug_cowboy, "~> 2.6"},
 
-      # docs dependencies
+      # dev dependencies
       {:ex_doc, "~> 0.29", only: :dev, runtime: false},
+      {:makeup_html, "~> 0.1", only: :dev, runtime: false},
 
       # test dependencies
       {:assertions, "~> 0.19"}
@@ -79,7 +81,8 @@ defmodule Griffin.MixProject do
     [
       "guides/why_griffin/overview.md",
       "guides/why_griffin/glossary.md",
-      "guides/getting_started/getting_started.md",
+      "guides/getting_started/quick_start.md",
+      "guides/getting_started/core_concepts.md",
       "guides/working_with_templates/adding_js_css_fonts.md",
       "guides/working_with_templates/layouts.md",
       "guides/working_with_templates/collections.md",
