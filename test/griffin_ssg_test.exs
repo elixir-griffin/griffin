@@ -24,8 +24,25 @@ defmodule GriffinSSGTest do
       assert frontmatter.date == "2022-06-14T10:01:55.506374Z"
       assert frontmatter.draft == false
 
-      refute content == ""
       assert content =~ "Getting started"
+    end
+
+    test "renders front matter variables before html output" do
+      assert {:ok, %{content: content}} =
+               GriffinSSG.parse("""
+               ---
+               fruit: 🍊
+               meal: 🍝
+               place: 🌊
+               ---
+               My favorite fruit is the <%= @fruit %>.
+               My favorite meal is <%= @meal %>.
+               My favorite place is the <%= @place %>.
+               """)
+
+      assert content =~ "My favorite fruit is the 🍊."
+      assert content =~ "My favorite meal is 🍝."
+      assert content =~ "My favorite place is the 🌊."
     end
 
     test "parses files that only contain frontmatter" do
@@ -57,38 +74,4 @@ defmodule GriffinSSGTest do
       assert content =~ "Content Only"
     end
   end
-
-  # describe "compile_layout/2" do
-  #   test "generates quoted code that can be evaluated into something valid" do
-  #     assert quoted = EEx.compile_file("test/files/layouts/simple.html.eex")
-
-  #     assert {eval, _bindings} =
-  #              Code.eval_quoted(quoted, assigns: [content: "Griffin", title: "test file"])
-
-  #     assert eval == "<html><title>test file</title><body>Griffin</body></html>"
-  #   end
-  # end
-
-  # describe "render/3" do
-  #   test "writes a rendered layout file to disk" do
-  #     tmp_path = Path.expand("test-data/output.html", __DIR__)
-
-  #     assert layout = EEx.compile_file("test/files/layouts/simple.html.eex")
-  #     assert {:ok, {frontmatter, content}} = GriffinSSG.parse_file("test/files/post.md")
-
-  #     refute File.exists?(tmp_path)
-
-  #     File.mkdir_p!(Path.dirname(tmp_path))
-
-  #     assert :ok = GriffinSSG.render(tmp_path, layout, frontmatter: frontmatter, content: content)
-  #     assert File.exists?(tmp_path)
-
-  #     assert file = File.read!(tmp_path)
-  #     assert file =~ "<title>Griffin Static Site Generator</title>"
-  #     assert file =~ "Griffin is a framework for building static sites"
-
-  #     File.rm!(tmp_path)
-  #     File.rmdir!(Path.dirname(tmp_path))
-  #   end
-  # end
 end

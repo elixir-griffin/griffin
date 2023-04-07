@@ -1,611 +1,649 @@
-Code.require_file("../../../installer/test/mix_helper.exs", __DIR__)
-
 defmodule Mix.Tasks.Grf.BuildTest do
-  use ExUnit.Case
-  import MixHelper
+  use ExUnit.Case, async: false
+  import GriffinFileHelper
   import Assertions, only: [assert_lists_equal: 2]
 
   # Missing tests:
   # - config hierarchy
   # - nested shortcodes
   # - hook event arguments
-  # - nested layouts
-  # - rendering variables in templates
   # - not rendering files that have draft in front matter
+  # - EEx templates inside input directory (instead of markdown)
 
-  @input_path "empty_input_path"
-  test "doesn't work on any files when given an empty input directory" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
-      Mix.Tasks.Grf.Build.run(["--input", @input_path])
-      assert_received {:mix_shell, :info, ["Wrote 0 files in " <> _]}
+  @tag :tmp_dir
+  test "doesn't work on any files when given an empty input directory", %{tmp_dir: tmp_dir} do
+    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir <> "/_site"])
+    assert_received {:mix_shell, :info, ["Wrote 0 files in " <> _]}
+  end
+
+  @tag :tmp_dir
+  test "raises when input directory isn't a readable directory", %{tmp_dir: tmp_dir} do
+    assert_raise Mix.Error, "Invalid input directory: `#{tmp_dir <> "404"}`", fn ->
+      Mix.Tasks.Grf.Build.run(["--input", tmp_dir <> "404"])
+    end
+  end
+
+  @tag :tmp_dir
+  test "files are output to the same relative directory as the input directory", %{
+    tmp_dir: tmp_dir
+  } do
+    File.mkdir_p!(tmp_dir <> "/a/b/c")
+
+    File.write!(tmp_dir <> "/a/b/c/d.md", """
+    # Testing output
+    This is supposed to go to <output>/a/b/c/d/index.html
+    """)
+
+    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir])
+    assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+    assert_file(tmp_dir <> "/a/b/c/d/index.html")
+  end
+
+  @tag :tmp_dir
+  test "input files with name `index` get written to the same relative directory", %{
+    tmp_dir: tmp_dir
+  } do
+    File.mkdir_p!(tmp_dir <> "/a/b/c")
+
+    File.write!(tmp_dir <> "/a/b/c/index.md", """
+    # Testing output
+    Since this is an index file,
+    the output is supposed to go to <output>/a/b/c/index.html
+    """)
+
+    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir])
+    assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+    assert_file(tmp_dir <> "/a/b/c/index.html")
+  end
+
+  @tag :tmp_dir
+  test "one layout can include multiple partials", %{tmp_dir: tmp_dir} do
+    File.write!(tmp_dir <> "/a.md", """
+    ---
+    title: "A"
+    foo: "Foo"
+    bar: "Bar"
+    baz: "Baz"
+    layout: "a"
+    ---
+    # File A
+    this is file A
+    """)
+
+    File.mkdir_p!(tmp_dir <> "/layouts/partials")
+
+    File.write!(tmp_dir <> "/layouts/a.eex", """
+    <html><title><%= @title %></title><body>
+    <%= @partials.one %>
+    <%= @partials.two %>
+    <%= @content %>
+    <%= @partials.three %>
+    </body></html>
+    """)
+
+    File.write!(tmp_dir <> "/layouts/partials/one.eex", """
+    <div id="one"><%= @foo %></div>
+    """)
+
+    File.write!(tmp_dir <> "/layouts/partials/two.eex", """
+    <div id="two"><%= @bar %></div>
+    """)
+
+    File.write!(tmp_dir <> "/layouts/partials/three.eex", """
+    <div id="three"><%= @baz %></div>
+    """)
+
+    Mix.Tasks.Grf.Build.run([
+      "--input",
+      tmp_dir,
+      "--output",
+      tmp_dir,
+      "--layouts",
+      tmp_dir <> "/layouts"
+    ])
+
+    assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+
+    assert_file(tmp_dir <> "/a/index.html", fn file ->
+      assert file =~ "<div id=\"one\">"
+      assert file =~ "Foo"
+      assert file =~ "<div id=\"two\">"
+      assert file =~ "Bar"
+      assert file =~ "File A"
+      assert file =~ "this is file A"
+      assert file =~ "<div id=\"three\">"
+      assert file =~ "Baz"
     end)
   end
 
-  @input_path "file_path_relative_input"
-  @output_path "file_path_relative_output"
-  test "files are output to the same relative directory as the input directory" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path <> "/a/b/c")
+  @tag :tmp_dir
+  test "can render multiple different layouts", %{tmp_dir: tmp_dir} do
+    File.write!(tmp_dir <> "/a.md", """
+    ---
+    title: "A"
+    layout: "a"
+    ---
+    # File A
+    this is file A
+    """)
 
-      File.write!(@input_path <> "/a/b/c/d.md", """
-      # Testing output
-      This is supposed to go to <output>/a/b/c/d/index.html
-      """)
+    File.write!(tmp_dir <> "/b.md", """
+    ---
+    title: "B"
+    layout: "b"
+    ---
+    # File B
+    this is file B
+    """)
 
-      Mix.Tasks.Grf.Build.run(["--input", @input_path, "--output", @output_path])
-      assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
-      assert_file(@output_path <> "/a/b/c/d/index.html")
+    File.mkdir_p!(tmp_dir <> "/layouts")
+
+    File.write!(tmp_dir <> "/layouts/a.eex", """
+    <html><title><%= @title %></title><body><div id="a"><%= @content%></div></body></html>
+    """)
+
+    File.write!(tmp_dir <> "/layouts/b.eex", """
+    <html><title><%= @title %></title><body><div id="b"><%= @content%></div></body></html>
+    """)
+
+    Mix.Tasks.Grf.Build.run([
+      "--input",
+      tmp_dir,
+      "--output",
+      tmp_dir,
+      "--layouts",
+      tmp_dir <> "/layouts"
+    ])
+
+    assert_received {:mix_shell, :info, ["Wrote 2 files in " <> _]}
+
+    assert_file(tmp_dir <> "/a/index.html", fn file ->
+      assert file =~ "<div id=\"a\">"
+      assert file =~ "File A"
+      refute file =~ "<div id=\"b\">"
+      refute file =~ "File B"
+    end)
+
+    assert_file(tmp_dir <> "/b/index.html", fn file ->
+      assert file =~ "<div id=\"b\">"
+      assert file =~ "File B"
+      refute file =~ "<div id=\"a\">"
+      refute file =~ "File A"
     end)
   end
 
-  @input_path "index_files_input"
-  @output_path "index_files_output"
-  test "input files with name `index` get written to the same relative directory" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path <> "/a/b/c")
+  @tag :tmp_dir
+  test "can render nested layouts", %{tmp_dir: tmp_dir} do
+    File.write!(tmp_dir <> "/a.md", """
+    ---
+    title: "Nested Layouts"
+    layout: "e"
+    ---
+    # Nesting layouts
+    how to lose the joy of life in one simple feature
+    """)
 
-      File.write!(@input_path <> "/a/b/c/index.md", """
-      # Testing output
-      Since this is an index file,
-      the output is supposed to go to <output>/a/b/c/index.html
-      """)
+    File.mkdir_p!(tmp_dir <> "/layouts")
 
-      Mix.Tasks.Grf.Build.run(["--input", @input_path, "--output", @output_path])
-      assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
-      assert_file(@output_path <> "/a/b/c/index.html")
+    File.write!(tmp_dir <> "/layouts/a.eex", """
+    <html><title><%= @title %></title><body><div id="a"><%= @content %></div></body></html>
+    """)
+
+    File.write!(tmp_dir <> "/layouts/b.eex", """
+    ---
+    layout: "a"
+    ---
+    <h1>Griffin Times</h1>
+    <%= @content%>
+    """)
+
+    File.write!(tmp_dir <> "/layouts/c.eex", """
+    ---
+    layout: "b"
+    ---
+    <h2>Elixir News</h2>
+    <%= @content%>
+    """)
+
+    File.write!(tmp_dir <> "/layouts/d.eex", """
+    ---
+    layout: "c"
+    ---
+    <h3>Releases</h3>
+    <%= @content%>
+    """)
+
+    File.write!(tmp_dir <> "/layouts/e.eex", """
+    ---
+    layout: "d"
+    ---
+    <h4>Version 1.14</h4>
+    <%= @content%>
+    """)
+
+    Mix.Tasks.Grf.Build.run([
+      "--input",
+      tmp_dir,
+      "--output",
+      tmp_dir,
+      "--layouts",
+      tmp_dir <> "/layouts",
+      "--debug"
+    ])
+
+    assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+    assert_received {:mix_shell, :info, ["Compiled 5 layouts (0 partials)"]}
+
+    assert_file(tmp_dir <> "/a/index.html", fn file ->
+      assert file =~ "<title>Nested Layouts"
+      assert file =~ "<div id=\"a\">"
+      assert file =~ "<h1>Griffin Times"
+      assert file =~ "<h2>Elixir News"
+      assert file =~ "<h3>Releases"
+      assert file =~ "<h4>Version 1.14"
+      assert file =~ "Nesting layouts"
+      assert file =~ "how to lose the joy of life in one simple feature"
     end)
   end
 
-  @input_path "one_layout_multiple_partials_input"
-  @output_path "one_layout_multiple_partials_output"
-  test "one layout can include multiple partials" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
+  @tag :tmp_dir
+  test "pages without a layout use the fallback HTML layout", %{tmp_dir: tmp_dir} do
+    File.write!(tmp_dir <> "/a.md", """
+    # File A
+    this is file A
+    """)
 
-      File.write!(@input_path <> "/a.md", """
-      ---
-      title: "A"
-      foo: "Foo"
-      bar: "Bar"
-      baz: "Baz"
-      layout: "a"
-      ---
-      # File A
-      this is file A
-      """)
+    Mix.Tasks.Grf.Build.run([
+      "--input",
+      tmp_dir,
+      "--output",
+      tmp_dir
+    ])
 
-      File.mkdir_p!(@input_path <> "/layouts/partials")
+    assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
 
-      File.write!(@input_path <> "/layouts/a.eex", """
-      <html><title><%= @title %></title><body>
-      <%= @partials.one %>
-      <%= @partials.two %>
-      <%= @content %>
-      <%= @partials.three %>
-      </body></html>
-      """)
+    assert_file(tmp_dir <> "/a/index.html", fn file ->
+      assert file =~ "<!DOCTYPE html>"
 
-      File.write!(@input_path <> "/layouts/partials/one.eex", """
-      <div id="one"><%= @foo %></div>
-      """)
+      assert file =~
+               "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
 
-      File.write!(@input_path <> "/layouts/partials/two.eex", """
-      <div id="two"><%= @bar %></div>
-      """)
+      assert file =~ "this is file A"
+    end)
+  end
 
-      File.write!(@input_path <> "/layouts/partials/three.eex", """
-      <div id="three"><%= @baz %></div>
-      """)
+  @tag :tmp_dir
+  test "raises when there are ciclic dependencies between layouts", %{tmp_dir: tmp_dir} do
+    File.mkdir_p!(tmp_dir <> "/layouts")
+    File.write!(tmp_dir <> "/layouts/a.eex", """
+    ---
+    layout: "b"
+    ---
+    <h1>Griffin Times</h1>
+    <%= @content%>
+    """)
 
+    File.write!(tmp_dir <> "/layouts/b.eex", """
+    ---
+    layout: "a"
+    ---
+    <h2>Elixir News</h2>
+    <%= @content%>
+    """)
+
+    assert_raise Mix.Error, "Dependency issue with layouts `[b, a]`", fn ->
       Mix.Tasks.Grf.Build.run([
         "--input",
-        @input_path,
+        tmp_dir,
         "--output",
-        @output_path,
+        tmp_dir,
         "--layouts",
-        @input_path <> "/layouts"
+        tmp_dir <> "/layouts"
       ])
+    end
+  end
 
-      assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+  @tag :tmp_dir
+  test "front matter is reflected in the final output of the file", %{tmp_dir: tmp_dir} do
+    File.write!(tmp_dir <> "/d.md", """
+    ---
+    title: "My custom title"
+    ---
+    # Testing output
+    The HTML page is supposed to have a title defined
+    from the front matter.
+    """)
 
-      assert_file(@output_path <> "/a/index.html", fn file ->
-        assert file =~ "<div id=\"one\">"
-        assert file =~ "Foo"
-        assert file =~ "<div id=\"two\">"
-        assert file =~ "Bar"
-        assert file =~ "File A"
-        assert file =~ "this is file A"
-        assert file =~ "<div id=\"three\">"
-        assert file =~ "Baz"
-      end)
+    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir])
+    assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+
+    assert_file(tmp_dir <> "/d/index.html", fn file ->
+      assert file =~ "<title>My custom title</title>"
     end)
   end
 
-  @input_path "multiple_layouts_input"
-  @output_path "multiple_layouts_output"
-  test "can render multiple different layouts" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
+  @tag :tmp_dir
+  test "front matter variables can be used inside templates", %{tmp_dir: tmp_dir} do
+    File.write!(tmp_dir <> "/d.md", """
+    ---
+    sum: 4
+    result: 3
+    ---
+    # Quick Maths
+    2 plus 2 is <%= @sum %> minus 1 is <%= @result %>
+    """)
 
-      File.write!(@input_path <> "/a.md", """
-      ---
-      title: "A"
-      layout: "a"
-      ---
-      # File A
-      this is file A
-      """)
+    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir])
+    assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
 
-      File.write!(@input_path <> "/b.md", """
-      ---
-      title: "B"
-      layout: "b"
-      ---
-      # File B
-      this is file B
-      """)
-
-      File.mkdir_p!(@input_path <> "/layouts")
-
-      File.write!(@input_path <> "/layouts/a.eex", """
-      <html><title><%= @title %></title><body><div id="a"><%= @content%></div></body></html>
-      """)
-
-      File.write!(@input_path <> "/layouts/b.eex", """
-      <html><title><%= @title %></title><body><div id="b"><%= @content%></div></body></html>
-      """)
-
-      Mix.Tasks.Grf.Build.run([
-        "--input",
-        @input_path,
-        "--output",
-        @output_path,
-        "--layouts",
-        @input_path <> "/layouts"
-      ])
-
-      assert_received {:mix_shell, :info, ["Wrote 2 files in " <> _]}
-
-      assert_file(@output_path <> "/a/index.html", fn file ->
-        assert file =~ "<div id=\"a\">"
-        assert file =~ "File A"
-        refute file =~ "<div id=\"b\">"
-        refute file =~ "File B"
-      end)
-
-      assert_file(@output_path <> "/b/index.html", fn file ->
-        assert file =~ "<div id=\"b\">"
-        assert file =~ "File B"
-        refute file =~ "<div id=\"a\">"
-        refute file =~ "File A"
-      end)
+    assert_file(tmp_dir <> "/d/index.html", fn file ->
+      assert file =~ "2 plus 2 is 4 minus 1 is 3"
     end)
   end
 
-  @input_path "default_layout_input"
-  @output_path "default_layout_output"
-  test "pages without a layout use the fallback HTML layout" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
+  @tag :tmp_dir
+  test "pages with permalinks get written to the right directory", %{tmp_dir: tmp_dir} do
+    File.write!(tmp_dir <> "/a.md", """
+    ---
+    title: "A"
+    permalink: "alpha/delta/gamma/some-custom-page"
+    ---
+    # File A
+    this is file A
+    """)
 
-      File.write!(@input_path <> "/a.md", """
-      # File A
-      this is file A
-      """)
+    File.write!(tmp_dir <> "/b.md", """
+    ---
+    title: "B"
+    permalink: "beta"
+    ---
+    # File B
+    this is file B
+    """)
 
-      Mix.Tasks.Grf.Build.run([
-        "--input",
-        @input_path,
-        "--output",
-        @output_path
-      ])
+    Mix.Tasks.Grf.Build.run([
+      "--input",
+      tmp_dir,
+      "--output",
+      tmp_dir
+    ])
 
-      assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+    assert_received {:mix_shell, :info, ["Wrote 2 files in " <> _]}
 
-      assert_file(@output_path <> "/a/index.html", fn file ->
-        assert file =~ "<!DOCTYPE html>"
+    assert_file(tmp_dir <> "/alpha/delta/gamma/some-custom-page/index.html", fn file ->
+      assert file =~ "this is file A"
+    end)
 
-        assert file =~
-                 "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
-
-        assert file =~ "this is file A"
-      end)
+    assert_file(tmp_dir <> "/beta/index.html", fn file ->
+      assert file =~ "this is file B"
     end)
   end
 
-  @input_path "front_matter_input"
-  @output_path "front_matter_output"
-  test "front matter is reflected in the final output of the file" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
+  @tag :tmp_dir
+  test "passthrough copies files to the correct path", %{tmp_dir: tmp_dir} do
+    Mix.Tasks.Grf.Build.run([
+      "--input",
+      tmp_dir,
+      "--output",
+      tmp_dir <> "/_site",
+      "--passthrough-copies",
+      # this is copying from the root of the project
+      "priv/**/*.ico,logo.png",
+      "--debug"
+    ])
 
-      File.write!(@input_path <> "/d.md", """
-      ---
-      title: "My custom title"
-      ---
-      # Testing output
-      The HTML page is supposed to have a title defined
-      from the front matter.
-      """)
+    assert_received {:mix_shell, :info, ["Copied 2 passthrough files in " <> _]}
 
-      Mix.Tasks.Grf.Build.run(["--input", @input_path, "--output", @output_path])
-      assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
-
-      assert_file(@output_path <> "/d/index.html", fn file ->
-        assert file =~ "<title>My custom title</title>"
-      end)
-    end)
+    assert_file(tmp_dir <> "/_site/priv/static/favicon.ico")
+    assert_file(tmp_dir <> "/_site/logo.png")
   end
 
-  @input_path "permalinks_input"
-  @output_path "permalinks_output"
-  test "pages with permalinks get written to the right directory" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
-
-      File.write!(@input_path <> "/a.md", """
-      ---
-      title: "A"
-      permalink: "alpha/delta/gamma/some-custom-page"
-      ---
-      # File A
-      this is file A
-      """)
-
-      File.write!(@input_path <> "/b.md", """
-      ---
-      title: "B"
-      permalink: "beta"
-      ---
-      # File B
-      this is file B
-      """)
-
-      Mix.Tasks.Grf.Build.run([
-        "--input",
-        @input_path,
-        "--output",
-        @output_path
-      ])
-
-      assert_received {:mix_shell, :info, ["Wrote 2 files in " <> _]}
-
-      assert_file(@output_path <> "/alpha/delta/gamma/some-custom-page/index.html", fn file ->
-        assert file =~ "this is file A"
-      end)
-
-      assert_file(@output_path <> "/beta/index.html", fn file ->
-        assert file =~ "this is file B"
-      end)
-    end)
-  end
-
-  @input_path "passthrough_copies_input"
-  @output_path "passthrough_copies_output"
-  test "passthrough copies files to the correct path" do
-    icon = File.read!("priv/static/favicon.ico")
-    img = File.read!("priv/static/griffin.png")
-
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
-      File.mkdir_p!("assets/js")
-      File.mkdir_p!("assets/css")
-      File.mkdir_p!("static")
-
-      File.write!("assets/js/test.js", """
-      console.log("griffin")
-      """)
-
-      File.write!("assets/css/test.css", """
-      /* griffin */
-      """)
-
-      File.write!("static/favicon.ico", icon)
-      File.write!("static/griffin.png", img)
-
-      Mix.Tasks.Grf.Build.run([
-        "--input",
-        @input_path,
-        "--output",
-        @output_path,
-        "--passthrough-copies",
-        "assets,static/*.ico"
-      ])
-
-      assert_file(@output_path <> "/assets/js/test.js", fn file ->
-        assert file =~ "console.log(\"griffin\")"
-      end)
-
-      assert_file(@output_path <> "/assets/css/test.css", fn file ->
-        assert file =~ "/* griffin */"
-      end)
-
-      # assert that wildcard was handled as expected
-      assert_file(@output_path <> "/static/favicon.ico")
-      refute_file(@output_path <> "/static/griffin.png")
-    end)
-  end
-
-  @input_path "hooks_input"
-  test "calls hooks before and after executing" do
+  @tag :tmp_dir
+  test "calls hooks before and after executing", %{tmp_dir: tmp_dir} do
     config_file = File.read!("test/files/config/hooks_only.ex")
 
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
-      :ok = File.write(@input_path <> "/config.ex", config_file)
+    File.mkdir_p!(tmp_dir)
+    :ok = File.write(tmp_dir <> "/config.ex", config_file)
 
-      Mix.Tasks.Grf.Build.run([
-        "--input",
-        @input_path,
-        "--config",
-        @input_path <> "/config.ex"
-      ])
+    Mix.Tasks.Grf.Build.run([
+      "--input",
+      tmp_dir,
+      "--config",
+      tmp_dir <> "/config.ex"
+    ])
 
-      assert_received {:mix_shell, :info, ["Wrote 0 files in " <> _]}
-      assert_received {:mix_shell, :info, ["I was called before build: " <> timestamp_before]}
-      assert_received {:mix_shell, :info, ["Directories before: " <> directories_before]}
-      assert_received {:mix_shell, :info, ["Run mode before: build"]}
-      assert_received {:mix_shell, :info, ["Output mode before: file_system"]}
-      assert_received {:mix_shell, :info, ["Directories after: " <> directories_after]}
-      assert_received {:mix_shell, :info, ["Results after: []"]}
-      assert_received {:mix_shell, :info, ["Run mode after: build"]}
-      assert_received {:mix_shell, :info, ["Output mode after: file_system"]}
-      assert_received {:mix_shell, :info, ["I was called after build: " <> timestamp_after]}
+    assert_received {:mix_shell, :info, ["Wrote 0 files in " <> _]}
+    assert_received {:mix_shell, :info, ["I was called before build: " <> timestamp_before]}
+    assert_received {:mix_shell, :info, ["Directories before: " <> directories_before]}
+    assert_received {:mix_shell, :info, ["Run mode before: build"]}
+    assert_received {:mix_shell, :info, ["Output mode before: file_system"]}
+    assert_received {:mix_shell, :info, ["Directories after: " <> directories_after]}
+    assert_received {:mix_shell, :info, ["Results after: []"]}
+    assert_received {:mix_shell, :info, ["Run mode after: build"]}
+    assert_received {:mix_shell, :info, ["Output mode after: file_system"]}
+    assert_received {:mix_shell, :info, ["I was called after build: " <> timestamp_after]}
 
-      directories = %{
-        input: @input_path,
-        output: "_site",
-        layouts: "lib/layouts",
-        partials: "lib/layouts/partials"
-      }
+    directories = %{
+      input: tmp_dir,
+      output: "_site",
+      layouts: "lib/layouts",
+      partials: "lib/layouts/partials"
+    }
 
-      expected_directories = "#{inspect(directories)}"
+    expected_directories = "#{inspect(directories)}"
 
-      assert directories_before == expected_directories
-      assert directories_after == expected_directories
-      assert timestamp_before <= timestamp_after
+    assert directories_before == expected_directories
+    assert directories_after == expected_directories
+    assert timestamp_before <= timestamp_after
+  end
+
+  @tag :tmp_dir
+  test "ignores files specified via CLI arguments", %{tmp_dir: tmp_dir} do
+    File.mkdir_p!(tmp_dir <> "/process/other")
+    File.mkdir_p!(tmp_dir <> "/ignore/some")
+
+    File.write!(tmp_dir <> "/ignore/some/file.md", """
+    # This won't be processed
+    """)
+
+    File.write!(tmp_dir <> "/process/other/file.md", """
+    # But this will
+    """)
+
+    Mix.Tasks.Grf.Build.run([
+      "--input",
+      tmp_dir,
+      "--output",
+      tmp_dir,
+      "--ignore",
+      tmp_dir <> "/ignore/**"
+    ])
+
+    refute_file(tmp_dir <> "/ignore/some/file/index.html")
+
+    assert_file(tmp_dir <> "/process/other/file/index.html", fn file ->
+      assert file =~ "But this will"
+    end)
+
+    assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+  end
+
+  @tag :tmp_dir
+  test "filters can be used in layouts correctly", %{tmp_dir: tmp_dir} do
+    File.mkdir_p!(tmp_dir)
+
+    File.write!(tmp_dir <> "/a.md", """
+    ---
+    title: "title"
+    layout: "a"
+    ---
+    # griffin filters
+    this will be uppercase
+    """)
+
+    File.mkdir_p!(tmp_dir <> "/layouts")
+
+    # use the default uppercase filter
+    File.write!(tmp_dir <> "/layouts/a.eex", """
+    <html><title><%= @title %></title>
+    <body>
+    <%= @content |> @uppercase.() %>
+    <hr />
+    </body></html>
+    """)
+
+    Mix.Tasks.Grf.Build.run([
+      "--input",
+      tmp_dir,
+      "--output",
+      tmp_dir,
+      "--layouts",
+      tmp_dir <> "/layouts"
+    ])
+
+    assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+
+    assert_file(tmp_dir <> "/a/index.html", fn file ->
+      assert file =~ "GRIFFIN FILTERS"
+      assert file =~ "THIS WILL BE UPPERCASE"
     end)
   end
 
-  @input_path "ignores_input"
-  @output_path "ignores_output"
-  test "ignores files specified via CLI arguments" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path <> "/process/other")
-      File.mkdir_p!(@input_path <> "/ignore/some")
+  @tag :tmp_dir
+  test "shortcodes can be used in layouts correctly", %{tmp_dir: tmp_dir} do
+    File.mkdir_p!(tmp_dir)
 
-      File.write!(@input_path <> "/ignore/some/file.md", """
-      # This won't be processed
-      """)
+    File.write!(tmp_dir <> "/a.md", """
+    ---
+    title: "title"
+    video_slug: "dQw4w9WgXcQ"
+    layout: "a"
+    ---
+    # Cool video
+    This is a cool video you should watch
+    """)
 
-      File.write!(@input_path <> "/process/other/file.md", """
-      # But this will
-      """)
+    File.mkdir_p!(tmp_dir <> "/layouts")
 
-      Mix.Tasks.Grf.Build.run([
-        "--input",
-        @input_path,
-        "--output",
-        @output_path,
-        "--ignore",
-        @input_path <> "/ignore/**"
-      ])
+    # use the default shortcode for youtube videos
+    File.write!(tmp_dir <> "/layouts/a.eex", """
+    <html><title><%= @title %></title>
+    <body>
+    <%= @content %>
+    <hr />
+    <%= @youtube.(@video_slug) %>
+    </body></html>
+    """)
 
-      refute_file(@output_path <> "/ignore/some/file/index.html")
+    Mix.Tasks.Grf.Build.run([
+      "--input",
+      tmp_dir,
+      "--output",
+      tmp_dir,
+      "--layouts",
+      tmp_dir <> "/layouts"
+    ])
 
-      assert_file(@output_path <> "/process/other/file/index.html", fn file ->
-        assert file =~ "But this will"
-      end)
+    assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
 
-      assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+    assert_file(tmp_dir <> "/a/index.html", fn file ->
+      assert file =~ "This is a cool video you should watch"
+      assert file =~ "src=\"https://www.youtube.com/embed/dQw4w9WgXcQ\""
     end)
   end
 
-  @input_path "filters_input"
-  @output_path "filters_output"
-  test "filters can be used in layouts correctly" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
-
-      File.write!(@input_path <> "/a.md", """
-      ---
-      title: "title"
-      layout: "a"
-      ---
-      # griffin filters
-      this will be uppercase
-      """)
-
-      File.mkdir_p!(@input_path <> "/layouts")
-
-      # use the default uppercase filter
-      File.write!(@input_path <> "/layouts/a.eex", """
-      <html><title><%= @title %></title>
-      <body>
-      <%= @content |> @uppercase.() %>
-      <hr />
-      </body></html>
-      """)
-
-      Mix.Tasks.Grf.Build.run([
-        "--input",
-        @input_path,
-        "--output",
-        @output_path,
-        "--layouts",
-        @input_path <> "/layouts"
-      ])
-
-      assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
-
-      assert_file(@output_path <> "/a/index.html", fn file ->
-        assert file =~ "GRIFFIN FILTERS"
-        assert file =~ "THIS WILL BE UPPERCASE"
-      end)
-    end)
-  end
-
-  @input_path "shortcodes_input"
-  @output_path "shortcodes_output"
-  test "shortcodes can be used in layouts correctly" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
-
-      File.write!(@input_path <> "/a.md", """
-      ---
-      title: "title"
-      video_slug: "dQw4w9WgXcQ"
-      layout: "a"
-      ---
-      # Cool video
-      This is a cool video you should watch
-      """)
-
-      File.mkdir_p!(@input_path <> "/layouts")
-
-      # use the default shortcode for youtube videos
-      File.write!(@input_path <> "/layouts/a.eex", """
-      <html><title><%= @title %></title>
-      <body>
-      <%= @content %>
-      <hr />
-      <%= @youtube.(@video_slug) %>
-      </body></html>
-      """)
-
-      Mix.Tasks.Grf.Build.run([
-        "--input",
-        @input_path,
-        "--output",
-        @output_path,
-        "--layouts",
-        @input_path <> "/layouts"
-      ])
-
-      assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
-
-      assert_file(@output_path <> "/a/index.html", fn file ->
-        assert file =~ "This is a cool video you should watch"
-        assert file =~ "src=\"https://www.youtube.com/embed/dQw4w9WgXcQ\""
-      end)
-    end)
-  end
-
-  @input_path "config_input"
-  @output_path "config_ouput"
-  test "a config file can be passed in to configure Griffin" do
+  @tag :tmp_dir
+  test "a config file can be passed in to configure Griffin", %{tmp_dir: tmp_dir} do
     config_file = """
     %{
-      input: \"#{@input_path <> "/source"}\",
-      output: \"#{@output_path <> "/public"}\",
-      layouts: \"#{@input_path <> "/cooldesignsinc"}\"
+      input: \"#{tmp_dir <> "/source"}\",
+      output: \"#{tmp_dir <> "/public"}\",
+      layouts: \"#{tmp_dir <> "/cooldesignsinc"}\"
     }
     """
 
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
-      :ok = File.write(@input_path <> "/config.ex", config_file)
+    File.mkdir_p!(tmp_dir)
+    :ok = File.write(tmp_dir <> "/config.ex", config_file)
 
-      File.mkdir_p!(@input_path <> "/source")
+    File.mkdir_p!(tmp_dir <> "/source")
 
-      File.write!(@input_path <> "/source/file.md", """
-      ---
-      layout: "conf"
-      ---
-      # Config is tricky
-      """)
+    File.write!(tmp_dir <> "/source/file.md", """
+    ---
+    layout: "conf"
+    ---
+    # Config is tricky
+    """)
 
-      File.mkdir_p!(@input_path <> "/cooldesignsinc")
+    File.mkdir_p!(tmp_dir <> "/cooldesignsinc")
 
-      File.write!(@input_path <> "/cooldesignsinc/conf.eex", """
-      <html><body><div id="config-test"><%= @content %></div></body></html>
-      """)
+    File.write!(tmp_dir <> "/cooldesignsinc/conf.eex", """
+    <html><body><div id="config-test"><%= @content %></div></body></html>
+    """)
 
-      Mix.Tasks.Grf.Build.run(["--config", @input_path <> "/config.ex"])
+    Mix.Tasks.Grf.Build.run(["--config", tmp_dir <> "/config.ex"])
 
-      assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+    assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
 
-      assert_file(@output_path <> "/public/file/index.html", fn file ->
-        assert file =~ "<div id=\"config-test\">"
-        assert file =~ "Config is tricky"
-      end)
+    assert_file(tmp_dir <> "/public/file/index.html", fn file ->
+      assert file =~ "<div id=\"config-test\">"
+      assert file =~ "Config is tricky"
     end)
   end
 
-  @input_path "quiet_input"
-  @output_path "quiet_ouput"
-  test "quiet option has intended effect" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
+  @tag :tmp_dir
+  test "quiet option has intended effect", %{tmp_dir: tmp_dir} do
+    File.mkdir_p!(tmp_dir)
 
-      File.write!(@input_path <> "/one.md", """
-      # one
-      """)
+    File.write!(tmp_dir <> "/one.md", """
+    # one
+    """)
 
-      File.write!(@input_path <> "/two.md", """
-      # two
-      """)
+    File.write!(tmp_dir <> "/two.md", """
+    # two
+    """)
 
-      Mix.Tasks.Grf.Build.run(["--input", @input_path, "--output", @output_path, "--quiet"])
+    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir, "--quiet"])
 
-      assert_received {:mix_shell, :info, ["Wrote 2 files in " <> _]}
-      refute_received {:mix_shell, :info, ["Compiled 0 layouts (0 partials)"]}
-      refute_received {:mix_shell, :info, ["writing: " <> _]}
+    assert_received {:mix_shell, :info, ["Wrote 2 files in " <> _]}
+    refute_received {:mix_shell, :info, ["Compiled 0 layouts (0 partials)"]}
+    refute_received {:mix_shell, :info, ["writing: " <> _]}
 
-      assert_file(@output_path <> "/one/index.html")
-      assert_file(@output_path <> "/two/index.html")
-    end)
+    assert_file(tmp_dir <> "/one/index.html")
+    assert_file(tmp_dir <> "/two/index.html")
   end
 
-  @input_path "dry_run_input"
-  @output_path "dry_run_output"
-  test "dry run option prevents writing to the file system" do
-    in_tmp(@input_path, fn ->
-      File.mkdir_p!(@input_path)
-      File.mkdir_p!("assets/js")
-      File.mkdir_p!("assets/css")
-      File.mkdir_p!("static")
+  @tag :tmp_dir
+  test "dry run option prevents writing to the file system", %{tmp_dir: tmp_dir} do
+    File.mkdir_p!(tmp_dir <> "/process/some")
+    File.mkdir_p!(tmp_dir <> "/process/other")
 
-      File.write!("assets/js/test.js", "")
-      File.write!("assets/css/test.css", "")
+    File.write!(tmp_dir <> "/process/some/file.md", """
+    # This won't be written to file system
+    """)
 
-      File.write!("static/favicon.ico", "")
-      File.write!("static/griffin.png", "")
+    File.write!(tmp_dir <> "/process/other/file.md", """
+    # Neither will this
+    """)
 
-      File.mkdir_p!(@input_path <> "/process/some")
-      File.mkdir_p!(@input_path <> "/process/other")
+    Mix.Tasks.Grf.Build.run([
+      "--input",
+      tmp_dir,
+      "--output",
+      tmp_dir,
+      "--passthrough-copies",
+      "priv/static",
+      "--dry-run"
+    ])
 
-      File.write!(@input_path <> "/process/some/file.md", """
-      # This won't be written to file system
-      """)
+    # this message might change in the future
+    assert_received {:mix_shell, :info, ["Wrote 2 files in " <> _]}
 
-      File.write!(@input_path <> "/process/other/file.md", """
-      # Neither will this
-      """)
+    # neither passthrough nor markdown files were actually written
+    refute_file(tmp_dir <> "/priv/static/favicon.ico")
+    refute_file(tmp_dir <> "/priv/static/griffin.png")
 
-      Mix.Tasks.Grf.Build.run([
-        "--input",
-        @input_path,
-        "--output",
-        @output_path,
-        "--passthrough-copies",
-        "assets,static",
-        "--dry-run"
-      ])
-
-      # this message might change in the future
-      assert_received {:mix_shell, :info, ["Wrote 2 files in " <> _]}
-
-      # neither assets nor markdown files were actually written
-      refute_file(@output_path <> "/assets/js/test.js")
-      refute_file(@output_path <> "/assets/css/test.css")
-      refute_file(@output_path <> "/static/favicon.ico")
-      refute_file(@output_path <> "/static/griffin.png")
-
-      refute_file(@output_path <> "/process/some/file/index.html")
-      refute_file(@output_path <> "/process/other/file/index.html")
-    end)
+    refute_file(tmp_dir <> "/process/some/file/index.html")
+    refute_file(tmp_dir <> "/process/other/file/index.html")
   end
 
   @tag :tmp_dir
