@@ -1,41 +1,33 @@
-Code.require_file("../../../installer/test/mix_helper.exs", __DIR__)
-
 defmodule Mix.Tasks.Grf.New.PageTest do
   use ExUnit.Case
-  import MixHelper
+  import GriffinFileHelper
 
-  @tmp_dir "single_path"
-  test "writes a new markdown file when called with a single path" do
-    in_tmp(@tmp_dir, fn ->
-      Mix.Tasks.Grf.New.Page.run(["test.md"])
+  @tag :tmp_dir
+  test "writes a new markdown file when called with a single path", %{tmp_dir: tmp_dir} do
+    Mix.Tasks.Grf.New.Page.run([tmp_dir <> "/test.md"])
 
-      assert_file("test.md", fn file ->
-        assert file =~ "title: \"test.md\""
-        assert file =~ "date: "
-        assert file =~ "draft: false"
-      end)
+    assert_file(tmp_dir <> "/test.md", fn file ->
+      assert file =~ "title: \"#{tmp_dir}/test.md\""
+      assert file =~ "date: "
+      assert file =~ "draft: false"
     end)
   end
 
-  @tmp_dir "title_option"
-  test "the title changes with the --title option" do
-    in_tmp(@tmp_dir, fn ->
-      Mix.Tasks.Grf.New.Page.run(["--title", "Testing testing 123", "test.md"])
+  @tag :tmp_dir
+  test "the title changes with the --title option", %{tmp_dir: tmp_dir} do
+    Mix.Tasks.Grf.New.Page.run(["--title", "Testing testing 123", tmp_dir <> "/test.md"])
 
-      assert_file("test.md", fn file ->
-        assert file =~ "title: \"Testing testing 123\""
-      end)
+    assert_file(tmp_dir <> "/test.md", fn file ->
+      assert file =~ "title: \"Testing testing 123\""
     end)
   end
 
-  @tmp_dir "draft_option"
-  test "the draft status is set to true with the --draft option" do
-    in_tmp(@tmp_dir, fn ->
-      Mix.Tasks.Grf.New.Page.run(["--draft", "test.md"])
+  @tag :tmp_dir
+  test "the draft status is set to true with the --draft option", %{tmp_dir: tmp_dir} do
+    Mix.Tasks.Grf.New.Page.run(["--draft", tmp_dir <> "/test.md"])
 
-      assert_file("test.md", fn file ->
-        assert file =~ "draft: true"
-      end)
+    assert_file(tmp_dir <> "/test.md", fn file ->
+      assert file =~ "draft: true"
     end)
   end
 end
