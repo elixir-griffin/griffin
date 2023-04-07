@@ -303,6 +303,7 @@ defmodule Mix.Tasks.Grf.Build do
 
   @input_extnames [".md", ".markdown"]
   @layout_extnames [".eex"]
+  @layouts_max_nesting_level 10
 
   @impl Mix.Task
   def run(args, _test_opts \\ []) do
@@ -329,6 +330,8 @@ defmodule Mix.Tasks.Grf.Build do
           # missing data dir
         }
 
+        validate_directories!(directories, opts)
+
         # Call before hooks
         for hook <- opts.hooks.before do
           hook.({directories, opts.run_mode, opts.output_mode})
@@ -337,12 +340,6 @@ defmodule Mix.Tasks.Grf.Build do
         copy_passthrough_files!(opts)
 
         compile_layouts!(opts)
-
-        # TODO for implementing collections:
-        # we already have a list of all the file paths at this stage.
-        # we can parse every file and keep it somewhere for caching
-        # on each file check for tag field in front_matter
-        # if present, add file to opts.collections.<tag>
 
         # subtract ignore files from files list
         ignore_files =
@@ -373,7 +370,7 @@ defmodule Mix.Tasks.Grf.Build do
 
         tasks =
           for metadata <- parsed_files do
-            # TODO we're passing in too much data here inside collections
+            # TODO we're probably passing in too much data here inside collections
             Task.async(__MODULE__, :render_file, [metadata.output, metadata, opts])
           end
 
@@ -423,13 +420,6 @@ defmodule Mix.Tasks.Grf.Build do
       |> String.trim_leading(output_path)
       |> String.trim_trailing("index.html")
 
-    # TODO if date = "last modified" in front matter
-    # add File.stat!(file, time: :posix).mtime to data
-
-    data =
-      front_matter
-      |> Map.put(:url, url)
-
     date =
       front_matter
       |> Map.get_lazy(:date, fn ->
@@ -447,7 +437,7 @@ defmodule Mix.Tasks.Grf.Build do
         output_path: file_output_path,
         date: date
       },
-      data: data,
+      data: Map.put(front_matter, :url, url),
       content: content,
       input: file,
       output: file_output_path
@@ -467,16 +457,6 @@ defmodule Mix.Tasks.Grf.Build do
       ) do
     layout_name = Map.get(data, :layout, "__fallback__")
 
-    layout =
-      :griffin_build_layouts
-      |> :ets.lookup(layout_name)
-      |> then(fn lookup_result ->
-        case lookup_result do
-          [] -> Mix.raise("No layout with name #{layout_name} was found when rendering `#{file}`")
-          [{^layout_name, layout}] -> layout
-        end
-      end)
-
     layout_assigns =
       filters_assigns()
       |> Map.merge(shortcodes_assigns())
@@ -484,6 +464,12 @@ defmodule Mix.Tasks.Grf.Build do
       |> Map.merge(%{page: page, collections: opts.collections})
       |> Map.merge(data)
       |> Map.put_new(:title, "Griffin")
+
+    layout = fetch_layout(layout_name)
+
+    if layout == nil do
+      Mix.raise("File #{file} specified layout `#{layout_name}` but no such layout was found")
+    end
 
     output =
       GriffinSSG.render(
@@ -504,72 +490,71 @@ defmodule Mix.Tasks.Grf.Build do
       |> Path.expand()
       |> File.mkdir_p()
 
-      File.write!(file, output)
+      case File.write(file, output) do
+        :ok ->
+          :ok
+
+        {:error, reason} ->
+          Mix.raise("Unable to write to #{file}: `#{reason}`")
+      end
     end
 
     output
   end
 
+  defp validate_directories!(directories, opts) do
+    unless File.exists?(directories.input) do
+      Mix.raise("Invalid input directory: `#{directories.input}`")
+    end
+
+    if opts.debug do
+      Mix.shell().info("""
+      Directories:
+      input: #{directories.input}
+      output: #{directories.output}
+      layouts: #{directories.layouts}
+      """)
+    end
+  end
+
   defp copy_passthrough_files!(opts) do
     unless opts.dry_run do
+      {elapsed_microseconds, num_files} = :timer.tc(fn ->
       opts.passthrough_copies
       |> maybe_parse_csv()
       |> Enum.flat_map(&GriffinFs.list_all(&1))
       |> Enum.map(fn path ->
         # e.g. file 'a/b/c/d.js' will be copied to '<output_dir>/a/b/c/d.js'
-        File.mkdir_p!(opts.output <> "/" <> Path.dirname(path))
-        File.cp!(path, opts.output <> "/" <> path)
+        File.mkdir_p(opts.output <> "/" <> Path.dirname(path))
+        cp_destination = opts.output <> "/" <> path
+
+        case File.cp(path, cp_destination) do
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            Mix.raise(
+              "Unable to copy passthrough file from #{path} to #{cp_destination}: `#{reason}`"
+            )
+        end
       end)
-    end
-  end
+      |> Enum.count()
+    end)
+      unless opts.quiet do
+        files_string =
+          if num_files == 1 do
+            "file"
+          else
+            "files"
+          end
 
-  defp compile_layouts!(opts) do
-    try do
-      :ets.new(:griffin_build_layouts, [:ordered_set, :public, :named_table])
-    rescue
-      ArgumentError ->
-        :ok
-    end
+        microseconds_passed = :erlang.float_to_binary(elapsed_microseconds / 1_000, decimals: 1)
 
-    layouts_dir = opts.layouts
-    layout_partials_dir = layouts_dir <> "/partials"
-
-    layout_files = GriffinFs.search_directory(layouts_dir, @layout_extnames)
-    num_layouts = length(layout_files)
-
-    Enum.map(layout_files, &compile_layout/1)
-
-    partial_layouts = GriffinFs.search_directory(layout_partials_dir, @layout_extnames)
-    num_partials = length(partial_layouts)
-
-    # compile partials
-    partials =
-      try do
-        Enum.reduce(partial_layouts, %{}, fn filepath, acc ->
-          Map.put(
-            acc,
-            String.to_atom(Path.basename(filepath, Path.extname(filepath))),
-            EEx.compile_file(filepath)
-          )
-        end)
-      rescue
-        Enum.EmptyError ->
-          %{}
+        Mix.shell().info(
+          "Copied #{num_files} passthrough #{files_string} in #{microseconds_passed}ms"
+        )
       end
-
-    :ets.insert(:griffin_build_layouts, {:__partials__, partials})
-
-    unless opts.quiet do
-      Mix.shell().info(
-        "Compiled #{num_layouts + num_partials} layouts (#{num_partials} partial#{unless num_partials == 1, do: "s"})"
-      )
     end
-
-    # compile fallback layout
-    :ets.insert(
-      :griffin_build_layouts,
-      {"__fallback__", EEx.compile_string(fallback_html_layout())}
-    )
   end
 
   defp compile_collections(parsed_files, opts) do
@@ -612,11 +597,174 @@ defmodule Mix.Tasks.Grf.Build do
     collections
   end
 
-  defp compile_layout(filepath) do
-    :ets.insert(
-      :griffin_build_layouts,
-      {Path.basename(filepath, Path.extname(filepath)), EEx.compile_file(filepath)}
-    )
+  defp compile_layouts!(opts) do
+    try do
+      :ets.new(:griffin_build_layouts, [:ordered_set, :public, :named_table])
+      :ets.new(:griffin_build_layout_strings, [:ordered_set, :public, :named_table])
+    rescue
+      ArgumentError ->
+        :ok
+    end
+
+    layouts_dir = opts.layouts
+    layout_partials_dir = layouts_dir <> "/partials"
+
+    layout_files = GriffinFs.search_directory(layouts_dir, @layout_extnames)
+    layout_names = Enum.map(layout_files, &Path.basename(&1, Path.extname(&1)))
+    num_layouts = length(layout_files)
+
+    result =
+      Enum.reduce_while(1..@layouts_max_nesting_level, layout_files, fn pass, acc ->
+        case compile_layouts_rec(acc, layout_names) do
+          :ok ->
+            {:halt, :ok}
+
+          not_compiled when pass < @layouts_max_nesting_level ->
+            {:cont, not_compiled}
+
+          not_compiled ->
+            {:halt, {:error, :partial_failure, not_compiled}}
+        end
+      end)
+
+    case result do
+      :ok ->
+        :ok
+
+      {:error, :partial_failure, not_compiled} ->
+        errored_layouts = Enum.map(not_compiled, &Path.basename(&1, Path.extname(&1)))
+        Mix.raise("Dependency issue with layouts `[#{Enum.join(errored_layouts, ", ")}]`")
+    end
+
+    partial_layouts = GriffinFs.search_directory(layout_partials_dir, @layout_extnames)
+    num_partials = length(partial_layouts)
+
+    # compile partials
+    partials =
+      try do
+        Enum.reduce(partial_layouts, %{}, fn filepath, acc ->
+          Map.put(
+            acc,
+            String.to_atom(Path.basename(filepath, Path.extname(filepath))),
+            EEx.compile_file(filepath)
+          )
+        end)
+      rescue
+        Enum.EmptyError ->
+          %{}
+      end
+
+    :ets.insert(:griffin_build_layouts, {:__partials__, partials})
+
+    unless opts.quiet do
+      Mix.shell().info(
+        "Compiled #{num_layouts + num_partials} layouts (#{num_partials} partial#{unless num_partials == 1, do: "s"})"
+      )
+    end
+
+    # compile fallback layout
+    insert_layout("__fallback__", fallback_html_layout())
+
+    :ok
+  end
+
+  defp compile_layouts_rec(layouts, not_compiled \\ [], layout_names)
+
+  defp compile_layouts_rec([], [], _layout_names), do: :ok
+  defp compile_layouts_rec([], not_compiled, _layout_names), do: not_compiled
+
+  defp compile_layouts_rec([file | remaining], acc, layout_names) do
+    layout_name = Path.basename(file, Path.extname(file))
+
+    layout =
+      file
+      |> File.read!()
+      |> GriffinSSG.parse(parse_content: false)
+      |> then(fn {:ok, result} -> result end)
+
+    case maybe_compile_layout(layout, layout_name, layout_names) do
+      {:error, :parent_layout_not_found} ->
+        compile_layouts_rec(remaining, [file | acc], layout_names)
+
+      :ok ->
+        compile_layouts_rec(remaining, acc, layout_names)
+    end
+  end
+
+  defp maybe_compile_layout(%{front_matter: front_matter, content: content}, name, all_layouts) do
+    if front_matter[:layout] == nil do
+      # layout has no parent
+      insert_layout(name, content)
+      insert_layout_string(name, content)
+      :ok
+    else
+      parent = front_matter.layout
+
+      unless parent in all_layouts do
+        Mix.raise(
+          "Layout #{name} specified parent layout `#{parent}` but no such layout was found"
+        )
+      end
+
+      parent_layout = fetch_layout_string(parent)
+
+      if parent_layout == nil do
+        {:error, :parent_layout_not_found}
+      else
+        # there is currently no better way of doing this that I know of,
+        # since compiled or eval'ed EEx strings replace all variables
+        # and we only want to replace @content.
+        # This isn't ideal because users might use different spacing
+        # which wouldn't work with the way we're merging the layouts.
+        content_patterns = [
+          "<%= @content %>",
+          "<%=@content%>",
+          "<%=@content %>",
+          "<%= @content%>"
+        ]
+
+        pattern =
+          Enum.reduce(content_patterns, "<%= @content %>", fn pattern, acc ->
+            if String.contains?(parent_layout, pattern) do
+              pattern
+            else
+              acc
+            end
+          end)
+
+        merged_content = String.replace(parent_layout, pattern, content)
+        insert_layout(name, merged_content)
+        insert_layout_string(name, merged_content)
+        :ok
+      end
+    end
+  end
+
+  defp insert_layout(name, string) do
+    ets_insert(:griffin_build_layouts, name, EEx.compile_string(string))
+  end
+
+  defp insert_layout_string(name, string) do
+    ets_insert(:griffin_build_layout_strings, name, string)
+  end
+
+  defp fetch_layout_string(name) do
+    ets_lookup(:griffin_build_layout_strings, name)
+  end
+
+  defp fetch_layout(name) do
+    ets_lookup(:griffin_build_layouts, name)
+  end
+
+  defp ets_insert(table, key, value) do
+    :ets.insert(table, {key, value})
+  end
+
+  defp ets_lookup(table, key) do
+    case :ets.lookup(table, key) do
+      [] -> nil
+      [{^key, value}] -> value
+    end
   end
 
   defp maybe_parse_csv(value) when is_binary(value) do
@@ -709,7 +857,6 @@ defmodule Mix.Tasks.Grf.Build do
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
         <title><%= @title %></title>
-        <link rel="stylesheet" href="style.css">
       </head>
       <body>
       <%= @content %>
