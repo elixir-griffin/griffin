@@ -1,8 +1,0 @@
-<html>
-<title><%= @title %></title><body>
-<p>URL: <%= @page.url %></p>
-<p>input_path: <%= @page.input_path %></p>
-<p>output_path: <%= @page.output_path %></p>
-<p>date: <%= @page.date %></p>
-<%= @content %>
-</body></html>
