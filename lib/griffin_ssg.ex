@@ -33,8 +33,9 @@ defmodule GriffinSSG do
   `Code.eval_quoted/2` on the layout will generate a correct result.
   """
   def render(layout, options) do
-    content = Map.fetch!(options, :content)
     assigns = Map.get(options, :assigns, %{})
+    content = Map.fetch!(options, :content) |> EEx.eval_string(assigns: assigns)
+
 
     flat_assigns =
       assigns
@@ -65,15 +66,27 @@ defmodule GriffinSSG do
 
   Returns a map with both the front matter and file content.
   """
-  def parse(string_content) do
+  def parse(string_content, opts \\ []) do
     try do
+      parse_content = Keyword.get(opts, :parse_content, true)
+
       {front_matter, content} =
         case String.split(string_content, ~r/\n---\n/, parts: 2) do
           [content] ->
-            {%{}, parse_content(content)}
+            {%{}, content}
 
           [raw_frontmatter, content] ->
-            {parse_frontmatter(raw_frontmatter), parse_content(content)}
+            {parse_frontmatter(raw_frontmatter), content}
+        end
+
+      content =
+        if parse_content do
+          # pre-process markdown by rendering EEx variables from front matter
+          content
+          |> EEx.eval_string(assigns: front_matter)
+          |> parse_content()
+        else
+          content
         end
 
       {:ok, %{front_matter: front_matter, content: content}}
