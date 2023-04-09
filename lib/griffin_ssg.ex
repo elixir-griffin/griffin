@@ -27,6 +27,32 @@ defmodule GriffinSSG do
   """
 
   @doc """
+  Parses the string contents of a file into two components: front matter and file content.
+
+  Front matter is an optional YAML snippet containing variables to be used in the content.
+  The content immediately follows the front matter and may reference front matter variables.
+
+  Returns `{:ok, map()}` where map contains both the front matter and file content.
+  """
+  def parse(string_content, _opts \\ []) do
+    try do
+      {front_matter, content} =
+        case String.split(string_content, ~r/\n---\n/, parts: 2) do
+          [content] ->
+            {%{}, content}
+
+          [raw_frontmatter, content] ->
+            {parse_frontmatter(raw_frontmatter), content}
+        end
+
+      {:ok, %{front_matter: front_matter, content: content}}
+    rescue
+      MatchError ->
+        {:error, :parsing_front_matter_failed}
+    end
+  end
+
+  @doc """
   Renders a layout with a given content, front matter and assigns.
 
   The layout is assumed to be a compiled EEx file or string, such that calling
@@ -34,14 +60,26 @@ defmodule GriffinSSG do
   """
   def render(layout, options) do
     assigns = Map.get(options, :assigns, %{})
-    content = Map.fetch!(options, :content) |> EEx.eval_string(assigns: assigns)
 
+    content =
+      options
+      |> Map.fetch!(:content)
+      |> EEx.eval_string(assigns: assigns)
+      |> then(fn content_string ->
+        case Map.get(options, :content_type, ".md") do
+          md when md in [".md", ".markdown"] ->
+            Earmark.as_html!(content_string)
 
-    flat_assigns =
+          ".eex" ->
+            content_string
+        end
+      end)
+
+    layout_assigns =
       assigns
       |> Map.put(:content, content)
-      # here we're compiling all existing partials when we might only need a very small subset.
-      # TODO compile only required partials by looking at args in the quoted expression
+      # here we're re-rendering all existing partials when we might only need a very small subset.
+      # TODO render only required partials by looking at args in the quoted expression for `layout`
       |> then(fn current_assigns ->
         Map.update(current_assigns, :partials, %{}, fn partials ->
           partials
@@ -54,46 +92,8 @@ defmodule GriffinSSG do
       end)
       |> Enum.to_list()
 
-    {result, _bindings} = Code.eval_quoted(layout, assigns: flat_assigns)
+    {result, _bindings} = Code.eval_quoted(layout, assigns: layout_assigns)
     result
-  end
-
-  @doc """
-  Parses the string contents of a file into two components: front matter and file content.
-
-  Front matter is optional metadata about the content that is defined at the top of the file.
-  The content immediately follows the front matter and may reference front matter variables.
-
-  Returns a map with both the front matter and file content.
-  """
-  def parse(string_content, opts \\ []) do
-    try do
-      parse_content = Keyword.get(opts, :parse_content, true)
-
-      {front_matter, content} =
-        case String.split(string_content, ~r/\n---\n/, parts: 2) do
-          [content] ->
-            {%{}, content}
-
-          [raw_frontmatter, content] ->
-            {parse_frontmatter(raw_frontmatter), content}
-        end
-
-      content =
-        if parse_content do
-          # pre-process markdown by rendering EEx variables from front matter
-          content
-          |> EEx.eval_string(assigns: front_matter)
-          |> parse_content()
-        else
-          content
-        end
-
-      {:ok, %{front_matter: front_matter, content: content}}
-    rescue
-      MatchError ->
-        {:error, :parsing_front_matter_failed}
-    end
   end
 
   defp parse_frontmatter(yaml) do
@@ -102,9 +102,5 @@ defmodule GriffinSSG do
     parsed
     |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
     |> Enum.into(%{})
-  end
-
-  defp parse_content(content) do
-    Earmark.as_html!(content)
   end
 end

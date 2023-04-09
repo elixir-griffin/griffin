@@ -13,9 +13,14 @@
 * Allow templates to specify Permalinks that override the default output path
 * Add support for hooks `before` and `after` Griffin generates output
 * Add support for content collections through the `tags` front matter field
+* Add support for nested layouts
+* Add support for EEx templates inside input directory
+* Add support for global assigns inside a project-wide data directory (defaults to `data`)
 
 ### Documentation
 * Added documentation for `mix grf.build` along with all supported options
+* Improved landing documentation page (`guides/why_griffin/overview.md`)
+* Add page for explaining core concepts (`guides/getting_started/core_concepts.md`)
 
 ### Fixes
 * Remove mandatory `.html.eex` restriction for Layouts and Partials

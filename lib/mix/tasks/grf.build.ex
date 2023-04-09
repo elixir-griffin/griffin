@@ -254,6 +254,7 @@ defmodule Mix.Tasks.Grf.Build do
     :input,
     :output,
     :layouts,
+    :data,
     :passthrough_copies,
     :ignore,
     :config,
@@ -266,6 +267,7 @@ defmodule Mix.Tasks.Grf.Build do
     input: "src",
     output: "_site",
     layouts: "lib/layouts",
+    data: "data",
     passthrough_copies: [],
     ignore: [],
     hooks: %{
@@ -285,6 +287,7 @@ defmodule Mix.Tasks.Grf.Build do
     input: :string,
     output: :string,
     layouts: :string,
+    data: :string,
     # passthrough copies (comma separated)
     passthrough_copies: :string,
     # ignore files (comma separated)
@@ -301,7 +304,7 @@ defmodule Mix.Tasks.Grf.Build do
     out: :output
   ]
 
-  @input_extnames [".md", ".markdown"]
+  @input_extnames [".md", ".markdown", ".eex"]
   @layout_extnames [".eex"]
   @layouts_max_nesting_level 10
 
@@ -322,12 +325,14 @@ defmodule Mix.Tasks.Grf.Build do
           |> Map.merge(Enum.into(opts, %{}))
           |> Map.merge(environment_config())
 
+        opts = Map.put(opts, :global_assigns, fetch_assigns_from_data_dir(opts))
+
         directories = %{
           input: opts.input,
           output: opts.output,
           layouts: opts.layouts,
-          partials: opts.layouts <> "/partials"
-          # missing data dir
+          partials: opts.layouts <> "/partials",
+          data: opts.data
         }
 
         validate_directories!(directories, opts)
@@ -370,7 +375,7 @@ defmodule Mix.Tasks.Grf.Build do
 
         tasks =
           for metadata <- parsed_files do
-            # TODO we're probably passing in too much data here inside collections
+            # TODO consider setting collections globally on ETS
             Task.async(__MODULE__, :render_file, [metadata.output, metadata, opts])
           end
 
@@ -461,6 +466,7 @@ defmodule Mix.Tasks.Grf.Build do
       filters_assigns()
       |> Map.merge(shortcodes_assigns())
       |> Map.merge(partials_assigns())
+      |> Map.merge(opts.global_assigns)
       |> Map.merge(%{page: page, collections: opts.collections})
       |> Map.merge(data)
       |> Map.put_new(:title, "Griffin")
@@ -475,6 +481,7 @@ defmodule Mix.Tasks.Grf.Build do
       GriffinSSG.render(
         layout,
         %{
+          content_type: Path.extname(input_path),
           content: content,
           assigns: layout_assigns
         }
@@ -502,9 +509,45 @@ defmodule Mix.Tasks.Grf.Build do
     output
   end
 
+  defp fetch_assigns_from_data_dir(opts) do
+    {assigns, num_files} =
+      if File.exists?(opts.data) do
+        files = GriffinFs.search_directory(opts.data, [".exs"])
+
+        {Enum.reduce(files, %{}, fn file, acc ->
+           filename =
+             file
+             |> Path.basename(Path.extname(file))
+             |> String.to_atom()
+
+           {assigns, _} = Code.eval_file(file)
+           Map.put(acc, filename, assigns)
+         end), length(files)}
+      else
+        {%{}, 0}
+      end
+
+    if opts.debug do
+      files_string =
+        if num_files == 1 do
+          "file"
+        else
+          "files"
+        end
+
+      Mix.shell().info("Stored data in global assigns from #{num_files} #{files_string}")
+    end
+
+    assigns
+  end
+
   defp validate_directories!(directories, opts) do
     unless File.exists?(directories.input) do
       Mix.raise("Invalid input directory: `#{directories.input}`")
+    end
+
+    unless File.dir?(directories.output) or not File.exists?(directories.output) do
+      Mix.raise("Invalid output directory: `#{directories.output}`")
     end
 
     if opts.debug do
@@ -519,27 +562,29 @@ defmodule Mix.Tasks.Grf.Build do
 
   defp copy_passthrough_files!(opts) do
     unless opts.dry_run do
-      {elapsed_microseconds, num_files} = :timer.tc(fn ->
-      opts.passthrough_copies
-      |> maybe_parse_csv()
-      |> Enum.flat_map(&GriffinFs.list_all(&1))
-      |> Enum.map(fn path ->
-        # e.g. file 'a/b/c/d.js' will be copied to '<output_dir>/a/b/c/d.js'
-        File.mkdir_p(opts.output <> "/" <> Path.dirname(path))
-        cp_destination = opts.output <> "/" <> path
+      {elapsed_microseconds, num_files} =
+        :timer.tc(fn ->
+          opts.passthrough_copies
+          |> maybe_parse_csv()
+          |> Enum.flat_map(&GriffinFs.list_all(&1))
+          |> Enum.map(fn path ->
+            # e.g. file 'a/b/c/d.js' will be copied to '<output_dir>/a/b/c/d.js'
+            File.mkdir_p(opts.output <> "/" <> Path.dirname(path))
+            cp_destination = opts.output <> "/" <> path
 
-        case File.cp(path, cp_destination) do
-          :ok ->
-            :ok
+            case File.cp(path, cp_destination) do
+              :ok ->
+                :ok
 
-          {:error, reason} ->
-            Mix.raise(
-              "Unable to copy passthrough file from #{path} to #{cp_destination}: `#{reason}`"
-            )
-        end
-      end)
-      |> Enum.count()
-    end)
+              {:error, reason} ->
+                Mix.raise(
+                  "Unable to copy passthrough file from #{path} to #{cp_destination}: `#{reason}`"
+                )
+            end
+          end)
+          |> Enum.count()
+        end)
+
       unless opts.quiet do
         files_string =
           if num_files == 1 do
@@ -679,7 +724,7 @@ defmodule Mix.Tasks.Grf.Build do
     layout =
       file
       |> File.read!()
-      |> GriffinSSG.parse(parse_content: false)
+      |> GriffinSSG.parse()
       |> then(fn {:ok, result} -> result end)
 
     case maybe_compile_layout(layout, layout_name, layout_names) do

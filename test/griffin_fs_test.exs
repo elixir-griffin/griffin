@@ -27,7 +27,7 @@ defmodule GriffinFsTest do
     setup_files(@files, tmp_dir)
 
     prefixed_files = Enum.map(@files, fn file -> tmp_dir <> "/" <> file end)
-    assert assert_lists_equal(prefixed_files, GriffinFs.list_all(tmp_dir))
+    assert_lists_equal(prefixed_files, GriffinFs.list_all(tmp_dir))
   end
 
   @tag :tmp_dir
@@ -35,7 +35,7 @@ defmodule GriffinFsTest do
     setup_files(@files, tmp_dir)
 
     prefixed_files = Enum.map(@files, fn file -> tmp_dir <> "/" <> file end)
-    assert assert_lists_equal(prefixed_files, GriffinFs.list_all(tmp_dir <> "/**"))
+    assert_lists_equal(prefixed_files, GriffinFs.list_all(tmp_dir <> "/**"))
 
     assert length(GriffinFs.list_all(tmp_dir <> "/**/*.{png,jpeg}")) == 4
     assert length(GriffinFs.list_all(tmp_dir <> "/**/*.mp4")) == 2
