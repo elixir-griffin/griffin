@@ -306,7 +306,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     <%= @content%>
     """)
 
-    assert_raise Mix.Error, "Dependency issue with layouts `[b, a]`", fn ->
+    assert_raise Mix.Error, "Dependency issue with layouts `[a, b]`", fn ->
       Mix.Tasks.Grf.Build.run([
         "--input",
         tmp_dir,

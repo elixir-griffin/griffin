@@ -677,8 +677,13 @@ defmodule Mix.Tasks.Grf.Build do
         :ok
 
       {:error, :partial_failure, not_compiled} ->
-        errored_layouts = Enum.map(not_compiled, &Path.basename(&1, Path.extname(&1)))
-        Mix.raise("Dependency issue with layouts `[#{Enum.join(errored_layouts, ", ")}]`")
+        errored_layouts =
+          not_compiled
+          |> Enum.map(&Path.basename(&1, Path.extname(&1)))
+          |> Enum.sort()
+          |> Enum.join(", ")
+
+        Mix.raise("Dependency issue with layouts `[#{errored_layouts}]`")
     end
 
     partial_layouts = GriffinFs.search_directory(layout_partials_dir, @layout_extnames)
