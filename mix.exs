@@ -52,6 +52,7 @@ defmodule Griffin.MixProject do
       {:yaml_elixir, "~> 2.9"},
       {:earmark, "~> 1.4"},
       {:plug_cowboy, "~> 2.6"},
+      {:slugify, "~> 1.3"},
 
       # dev dependencies
       {:ex_doc, "~> 0.29", only: :dev, runtime: false},
@@ -86,8 +87,10 @@ defmodule Griffin.MixProject do
       "guides/working_with_templates/adding_js_css_fonts.md",
       "guides/working_with_templates/layouts.md",
       "guides/working_with_templates/collections.md",
-      "guides/working_with_templates/pagination.md",
-      "guides/working_with_templates/permalinks.md"
+      "guides/working_with_templates/content_dates.md",
+      "guides/working_with_templates/permalinks.md",
+      "guides/architecture/build_process.md",
+      "guides/using_data/data_cascade.md"
     ]
   end
 
@@ -95,7 +98,9 @@ defmodule Griffin.MixProject do
     [
       "Why Griffin?": ~r/guides\/why_griffin\/.?/,
       "Getting Started": ~r/guides\/getting_started\/.?/,
-      "Working with Templates": ~r/guides\/working_with_templates\/.?/
+      "Working with Templates": ~r/guides\/working_with_templates\/.?/,
+      "Using Data": ~r/guides\/using_data\/.?/,
+      "Architecture": ~r/guides\/architecture\/.?/
     ]
   end
 
