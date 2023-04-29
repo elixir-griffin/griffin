@@ -1,5 +1,4 @@
 defmodule GriffinSSG.Layouts do
-
   @layout_extnames [".eex"]
   @layouts_max_nesting_level 10
   @compiled_layouts_table :griffin_build_layouts
@@ -79,17 +78,20 @@ defmodule GriffinSSG.Layouts do
 
     case result do
       :ok ->
-        partial_layouts = GriffinSSG.Filesystem.search_directory(layout_partials_dir, @layout_extnames)
+        partial_layouts =
+          GriffinSSG.Filesystem.search_directory(layout_partials_dir, @layout_extnames)
+
         num_partials = length(partial_layouts)
 
         # compile partials
-        partials = Enum.reduce(partial_layouts, %{}, fn filepath, acc ->
-          Map.put(
-            acc,
-            String.to_atom(Path.basename(filepath, Path.extname(filepath))),
-            EEx.compile_file(filepath)
-          )
-        end)
+        partials =
+          Enum.reduce(partial_layouts, %{}, fn filepath, acc ->
+            Map.put(
+              acc,
+              String.to_atom(Path.basename(filepath, Path.extname(filepath))),
+              EEx.compile_file(filepath)
+            )
+          end)
 
         :ets.insert(@compiled_layouts_table, {:__partials__, partials})
 

@@ -72,10 +72,14 @@ defmodule GriffinSSG.FilesystemTest do
     assert Filesystem.output_filepath("file.md", "", "_site") == "_site/file/index.html"
 
     assert Filesystem.output_filepath("a/b/c/index.md", "a", "_site") == "_site/b/c/index.html"
-    assert Filesystem.output_filepath("a/b/c/file.md", "a", "_site") == "_site/b/c/file/index.html"
+
+    assert Filesystem.output_filepath("a/b/c/file.md", "a", "_site") ==
+             "_site/b/c/file/index.html"
 
     assert Filesystem.output_filepath("a/b/c/index.md", "a/b/c", "_site") == "_site/index.html"
-    assert Filesystem.output_filepath("a/b/c/file.md", "a/b/c", "_site") == "_site/file/index.html"
+
+    assert Filesystem.output_filepath("a/b/c/file.md", "a/b/c", "_site") ==
+             "_site/file/index.html"
 
     assert Filesystem.output_filepath("a/b/c/index.md", "", "_site") == "_site/a/b/c/index.html"
 

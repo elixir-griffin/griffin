@@ -100,7 +100,7 @@ defmodule Griffin.MixProject do
       "Getting Started": ~r/guides\/getting_started\/.?/,
       "Working with Templates": ~r/guides\/working_with_templates\/.?/,
       "Using Data": ~r/guides\/using_data\/.?/,
-      "Architecture": ~r/guides\/architecture\/.?/
+      Architecture: ~r/guides\/architecture\/.?/
     ]
   end
 

@@ -23,6 +23,7 @@ defmodule GriffinSSG.Filesystem do
       File.mkdir_p(destination <> "/" <> Path.dirname(path))
 
       cp_destination = destination <> "/" <> Path.relative_to_cwd(path)
+
       case {File.cp(path, cp_destination), acc} do
         {:ok, {:ok, count}} ->
           {:ok, count + 1}
@@ -31,10 +32,15 @@ defmodule GriffinSSG.Filesystem do
           errors
 
         {{:error, reason}, {:ok, _count}} ->
-          {:errors, ["Unable to copy passthrough file from #{path} to #{cp_destination}: `#{reason}`"]}
+          {:errors,
+           ["Unable to copy passthrough file from #{path} to #{cp_destination}: `#{reason}`"]}
 
         {{:error, reason}, errors} ->
-          {:errors, ["Unable to copy passthrough file from #{path} to #{cp_destination}: `#{reason}`" | errors]}
+          {:errors,
+           [
+             "Unable to copy passthrough file from #{path} to #{cp_destination}: `#{reason}`"
+             | errors
+           ]}
       end
     end)
   end

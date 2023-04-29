@@ -272,7 +272,7 @@ defmodule Mix.Tasks.Grf.Build do
     :layouts,
     :output,
     :passthrough_copies,
-    :quiet,
+    :quiet
   ]
 
   @default_opts %{
@@ -379,7 +379,9 @@ defmodule Mix.Tasks.Grf.Build do
 
         tasks =
           for file <- files do
-            Task.Supervisor.async_nolink(sup, __MODULE__, :parse_file, [file, opts], ordered: false)
+            Task.Supervisor.async_nolink(sup, __MODULE__, :parse_file, [file, opts],
+              ordered: false
+            )
           end
 
         parsed_files =
@@ -403,7 +405,13 @@ defmodule Mix.Tasks.Grf.Build do
         tasks =
           for metadata <- parsed_files do
             # TODO consider setting collections globally on ETS or persistent term
-            Task.Supervisor.async_nolink(sup, __MODULE__, :render_file, [metadata.output, metadata, opts], ordered: false)
+            Task.Supervisor.async_nolink(
+              sup,
+              __MODULE__,
+              :render_file,
+              [metadata.output, metadata, opts],
+              ordered: false
+            )
           end
 
         results =
@@ -765,11 +773,9 @@ defmodule Mix.Tasks.Grf.Build do
     end
   end
 
-
   defp fetch_layout(name) do
     ets_lookup(:griffin_build_layouts, name)
   end
-
 
   defp ets_lookup(table, key) do
     case :ets.lookup(table, key) do
