@@ -1,9 +1,43 @@
-defmodule GriffinFs do
+defmodule GriffinSSG.Filesystem do
   @moduledoc """
-  Helper functions for handling files and paths
+  Helper functions for handling basic file operations
   """
 
   @ignored_dirs [".git", ".elixir_ls"]
+
+  @doc """
+  Copies a list of files or directories into the `destination` directory.
+  When successful, returns `{:ok, count}` where `count` is the number of copied files.
+  if successful or `{:errors, list(string())}` when one or more copy
+  operations failed.
+  In case of error, the `destination` directory will be left in a dirty state,
+  and only some of the files might have been copied.
+  """
+  def copy_all(files, destination) do
+    ## TODO LOOP OVER FILES AND EITHER CALL CP_R OR CP,
+    ## THIS CODE DOES NOT WORK WITH RELATIVE AND ABSOLUTE PATHS
+    files
+    |> Enum.flat_map(&list_all(&1))
+    |> Enum.reduce({:ok, 0}, fn path, acc ->
+      # e.g. file 'a/b/c/d.js' will be copied to '<destination>/a/b/c/d.js'
+      File.mkdir_p(destination <> "/" <> Path.dirname(path))
+
+      cp_destination = destination <> "/" <> Path.relative_to_cwd(path)
+      case {File.cp(path, cp_destination), acc} do
+        {:ok, {:ok, count}} ->
+          {:ok, count + 1}
+
+        {:ok, errors} ->
+          errors
+
+        {{:error, reason}, {:ok, _count}} ->
+          {:errors, ["Unable to copy passthrough file from #{path} to #{cp_destination}: `#{reason}`"]}
+
+        {{:error, reason}, errors} ->
+          {:errors, ["Unable to copy passthrough file from #{path} to #{cp_destination}: `#{reason}`" | errors]}
+      end
+    end)
+  end
 
   @doc """
   Lists all files from a path or wildcard.
