@@ -60,6 +60,7 @@ defmodule GriffinSSG do
   """
   def render(layout, options) do
     assigns = Map.get(options, :assigns, %{})
+    rerender_partials = Map.get(options, :rerender_partials, true)
 
     content =
       options
@@ -81,14 +82,18 @@ defmodule GriffinSSG do
       # here we're re-rendering all existing partials when we might only need a very small subset.
       # TODO render only required partials by looking at args in the quoted expression for `layout`
       |> then(fn current_assigns ->
-        Map.update(current_assigns, :partials, %{}, fn partials ->
-          partials
-          |> Enum.map(fn partial ->
-            {compiled, _bindings} = Code.eval_quoted(partial, assigns: current_assigns)
-            compiled
+        if rerender_partials do
+          Map.update(current_assigns, :partials, %{}, fn partials ->
+            partials
+            |> Enum.map(fn partial ->
+              {compiled, _bindings} = Code.eval_quoted(partial, assigns: current_assigns)
+              compiled
+            end)
+            |> Enum.into(%{})
           end)
-          |> Enum.into(%{})
-        end)
+        else
+          current_assigns
+        end
       end)
       |> Enum.to_list()
 

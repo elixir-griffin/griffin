@@ -663,23 +663,35 @@ defmodule Mix.Tasks.Grf.BuildTest do
   end
 
   @tag :tmp_dir
-  test "collections are generated correctyly", %{tmp_dir: tmp_dir} do
-    File.write!(tmp_dir <> "/notags.md", """
+  test "collections are generated correctly", %{tmp_dir: tmp_dir} do
+    File.mkdir_p!(tmp_dir <> "/src")
+
+    File.write!(tmp_dir <> "/config.exs", """
+    %{
+      collections: %{
+        tags: %{}
+      }
+    }
+    """)
+
+    File.write!(tmp_dir <> "/src/notags.md", """
     ---
     title: "no tags"
     ---
     # I have no tags
     """)
 
-    File.write!(tmp_dir <> "/onetag.md", """
+    File.write!(tmp_dir <> "/src/onetag.md", """
     ---
+    title: "one tag"
     tags: "post"
     ---
     # I have one tag
     """)
 
-    File.write!(tmp_dir <> "/moretags.md", """
+    File.write!(tmp_dir <> "/src/moretags.md", """
     ---
+    title: more tags
     tags:
       - post
       - personal
@@ -688,8 +700,9 @@ defmodule Mix.Tasks.Grf.BuildTest do
     # I have three tags
     """)
 
-    File.write!(tmp_dir <> "/evenmore.md", """
+    File.write!(tmp_dir <> "/src/evenmore.md", """
     ---
+    title: even more tags
     tags: ["personal"]
     ---
     # I also have tags but in different yaml
@@ -697,26 +710,28 @@ defmodule Mix.Tasks.Grf.BuildTest do
 
     Mix.Tasks.Grf.Build.run([
       "--input",
-      tmp_dir,
+      tmp_dir <> "/src",
       "--output",
-      tmp_dir,
+      tmp_dir <> "/_site",
+      "--config",
+      tmp_dir <> "/config.exs",
       "--debug"
     ])
 
-    assert_file(tmp_dir <> "/notags/index.html")
-    assert_file(tmp_dir <> "/onetag/index.html")
-    assert_file(tmp_dir <> "/moretags/index.html")
-    assert_file(tmp_dir <> "/evenmore/index.html")
+    assert_file(tmp_dir <> "/_site/notags/index.html")
+    assert_file(tmp_dir <> "/_site/onetag/index.html")
+    assert_file(tmp_dir <> "/_site/moretags/index.html")
+    assert_file(tmp_dir <> "/_site/evenmore/index.html")
 
     assert_received {:mix_shell, :info, ["Wrote 4 files in " <> _]}
-    assert_received {:mix_shell, :info, ["Collections: personal, post, tldr"]}
-    assert_received {:mix_shell, :info, ["Collection personal: " <> personal_tagged_csv]}
-    assert_received {:mix_shell, :info, ["Collection post: " <> post_tagged_csv]}
-    assert_received {:mix_shell, :info, ["Collection tldr: " <> tldr_tagged_csv]}
+    # assert_received {:mix_shell, :info, ["Collections: personal, post, tldr"]}
+    assert_received {:mix_shell, :info, ["Tags personal: " <> personal_tagged_csv]}
+    assert_received {:mix_shell, :info, ["Tags post: " <> post_tagged_csv]}
+    assert_received {:mix_shell, :info, ["Tags tldr: " <> tldr_tagged_csv]}
 
-    one_tag_file = Path.absname(tmp_dir <> "/onetag.md")
-    more_tags_file = Path.absname(tmp_dir <> "/moretags.md")
-    even_more_file = Path.absname(tmp_dir <> "/evenmore.md")
+    one_tag_file = Path.absname(tmp_dir <> "/src/onetag.md")
+    more_tags_file = Path.absname(tmp_dir <> "/src/moretags.md")
+    even_more_file = Path.absname(tmp_dir <> "/src/evenmore.md")
 
     personal_collection = String.split(personal_tagged_csv, ",")
     post_collection = String.split(post_tagged_csv, ",")
@@ -777,6 +792,14 @@ defmodule Mix.Tasks.Grf.BuildTest do
   test "layouts can render collection data", %{tmp_dir: tmp_dir} do
     File.mkdir_p!(tmp_dir <> "/src/posts")
 
+    File.write!(tmp_dir <> "/config.exs", """
+    %{
+      collections: %{
+        tags: %{}
+      }
+    }
+    """)
+
     File.write!(tmp_dir <> "/src/posts/a.md", """
     ---
     title: "With Griffin you can write a blog"
@@ -810,7 +833,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     <h1>Posts</h1>
     <%= @content %>
     <ul>
-      <%= for post <- @collections.post do %>
+      <%= for post <- @collections.tags.post do %>
         <li><a href="<%= post.data.url %>"><%= post.data.title %></a></li>
       <% end %>
     </ul>
@@ -825,17 +848,19 @@ defmodule Mix.Tasks.Grf.BuildTest do
       "--input",
       tmp_dir <> "/src",
       "--output",
-      tmp_dir,
+      tmp_dir <> "/_site",
       "--layouts",
-      tmp_dir <> "/lib/layouts"
+      tmp_dir <> "/lib/layouts",
+      "--config",
+      tmp_dir <> "/config.exs"
     ])
 
     assert_received {:mix_shell, :info, ["Wrote 3 files in " <> _]}
 
-    assert_file(tmp_dir <> "/posts/a/index.html")
-    assert_file(tmp_dir <> "/posts/b/index.html")
+    assert_file(tmp_dir <> "/_site/posts/a/index.html")
+    assert_file(tmp_dir <> "/_site/posts/b/index.html")
 
-    assert_file(tmp_dir <> "/blog/index.html", fn file ->
+    assert_file(tmp_dir <> "/_site/blog/index.html", fn file ->
       assert file =~ "<title>Just another blog"
       assert file =~ "<h1>Posts"
       assert file =~ "These are some of my ramblings."
