@@ -3,23 +3,22 @@
 Layouts are special templates that can be used to wrap other content.
 To denote that a piece of content should be wrapped in a template, use the layout key in your front matter, like so:
 
-```jekyll
+```markdown
 ---
-layout: cool_layout.eex
+layout: cool_layout
 title: My Cool Griffin Blog Post
 ---
 # <%= title %>
 ```
 
-This will look for a `cool_layout.eex` EEx file in your *includes* folder at `_includes/cool_layout.eex`.
+This will look for a `cool_layout.eex` EEx file in your *layouts* folder at `lib/layouts/cool_layout.eex`.
 
 Next, we need to create a `cool_layout.eex` file. It can contain any type of text, but here we’re using HTML:
 
-```eex
+```html
 ---
 title: My Griffin Blog
 ---
-
 <!doctype html>
 <html lang="en">
   <head>
