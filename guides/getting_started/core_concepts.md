@@ -129,11 +129,12 @@ The rendered output of this page will be:
 #### Layouts can be nested
 Layouts can be nested by adding a Front Matter section and setting the `layout` variable:
 
-```markdown
+```html
 ---
 layout: base
 ---
 <p>I am a nested layout</p>
+<%= @content %>
 ```
 
 Nesting layouts can be useful to reduce duplication of code. You can build a top level layout called `base`, which defines your core HTML with CSS and JS imports, and other, much simpler layouts for individual pages like `home`, `blog` or `about`.
