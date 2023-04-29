@@ -4,7 +4,10 @@
 
 [![Build Status](https://github.com/elixir-griffin/griffin/actions/workflows/elixir.yaml/badge.svg)](https://github.com/elixir-griffin/griffin/actions/workflows/elixir.yaml)
 [![Hex.pm](https://img.shields.io/hexpm/v/griffin_ssg.svg)](https://hex.pm/packages/griffin_ssg)
-[![Documentation](https://img.shields.io/badge/documentation-gray)](https://hexdocs.pm/griffin_ssg)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-blue.svg)](https://hexdocs.pm/griffin_ssg)
+[![License](https://img.shields.io/hexpm/l/griffin_ssg.svg)](https://github.com/elixir-griffin/griffin/blob/main/LICENSE.md)
+[![Total Download](https://img.shields.io/hexpm/dt/griffin_ssg.svg)](https://hex.pm/packages/griffin_ssg)
+[![Last Updated](https://img.shields.io/github/last-commit/elixir-griffin/griffin.svg)](https://github.com/elixir-griffin/griffin/commits/main)
 
 
 ## Griffin
@@ -14,4 +17,4 @@
 Griffin is a framework for building static sites inspired by [11ty](https://www.11ty.dev/), [Hugo](https://gohugo.io/) and others. It's purposely made to feel familiar to Elixir and Phoenix users.
 
 ## Getting started
-Install the latest version of Griffin by following the latest instructions on the hex.pm [package page](https://hexdocs.pm/griffin_ssg/installation.html#griffin)
+Install the latest version of Griffin by following the latest instructions on the hex.pm [documentation page](https://hexdocs.pm/griffin_ssg)
