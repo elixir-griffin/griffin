@@ -23,8 +23,8 @@ defmodule Mix.Tasks.Grf.Server do
   @impl Mix.Task
   def run(args) do
     port = GriffinSSGApp.http_port
-    IO.puts "Starting webserver on #{port}"
     Application.put_env(:griffin_ssg, :server, true, persistent: true)
+    Mix.shell().info "Starting webserver on http://localhost:#{port}"
     Mix.Tasks.Run.run(open_args(args) ++ run_args())
   end
 
