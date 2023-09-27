@@ -20,9 +20,11 @@ defmodule Mix.Tasks.Grf.Server do
       $ mix do deps.loadpaths --no-deps-check, phx.server
   """
 
-  @impl true
+  @impl Mix.Task
   def run(args) do
+    port = GriffinSSGApp.http_port()
     Application.put_env(:griffin_ssg, :server, true, persistent: true)
+    Mix.shell().info("Starting webserver on http://localhost:#{port}")
     Mix.Tasks.Run.run(open_args(args) ++ run_args())
   end
 

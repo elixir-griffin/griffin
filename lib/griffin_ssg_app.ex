@@ -12,7 +12,7 @@ defmodule GriffinSSGApp do
     Supervisor.start_link(children, strategy: :one_for_one, name: Griffin.Supervisor)
   end
 
-  defp http_port do
+  def http_port do
     fallback =
       "GRIFFIN_HTTP_PORT"
       |> System.get_env(@default_port)
