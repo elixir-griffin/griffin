@@ -18,9 +18,10 @@ defmodule GriffinSSG.Web.Plug do
 
   def implicit_index_html(conn, _) do
     path = conn.request_path
+
     if Path.extname(path) == "" do
       path = if String.ends_with?(path, "/"), do: path, else: "#{path}/"
-      %{conn | request_path: "#{path}index.html", path_info: conn.path_info ++ ["index.html"] }
+      %{conn | request_path: "#{path}index.html", path_info: conn.path_info ++ ["index.html"]}
     else
       conn
     end
