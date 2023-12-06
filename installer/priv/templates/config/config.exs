@@ -9,7 +9,8 @@ import Config
 
 config :griffin_ssg,
   input_path: "<%= @input_path %>",
-  output_path: "<%= @output_path %>"
+  output_path: "<%= @output_path %>",
+  passthrough_copies: ["assets/*"]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

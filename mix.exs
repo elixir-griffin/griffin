@@ -49,10 +49,12 @@ defmodule Griffin.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:yaml_elixir, "~> 2.9"},
       {:earmark, "~> 1.4"},
+      {:file_system, "~> 1.0", override: true},
       {:plug_cowboy, "~> 2.6"},
+      {:plug_live_reload, "~> 0.1.0"},
       {:slugify, "~> 1.3"},
+      {:yaml_elixir, "~> 2.9"},
 
       # dev dependencies
       {:ex_doc, "~> 0.29", only: :dev, runtime: false},

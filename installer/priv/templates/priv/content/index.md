@@ -1,6 +1,6 @@
 ---
 title: "<%= @app_name %>"
-layout: "default"
+layout: "default.html"
 ---
 
 Quick static site generation with Elixir templates 🧡

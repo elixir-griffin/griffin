@@ -1,33 +1,43 @@
 defmodule GriffinSSG.Web.Plug do
-  @moduledoc """
-  <%= @app_module %> Cowboy Plug to serve files from the output directory
-  WARNING: This is a simple webserver written only to serve files from disk.
-  It is meant only for usage in development environments. Please do not use
-  this as a means to serve your generated website.
-  """
+  use Plug.Router
+  use Plug.Debugger
+  use Plug.ErrorHandler
+
+  plug(PlugLiveReload)
+  plug(Plug.Logger, log: :debug)
+  plug(:match)
+  plug(:dispatch)
 
   @output_path Application.compile_env(:griffin_ssg, :output_path, "_site")
 
-  use Plug.Builder
-
-  plug(:implicit_index_html)
-
-  plug(Plug.Static, at: "/", from: @output_path)
-
-  plug(:not_found)
-
-  def implicit_index_html(conn, _) do
-    path = conn.request_path
-
-    if Path.extname(path) == "" do
-      path = if String.ends_with?(path, "/"), do: path, else: "#{path}/"
-      %{conn | request_path: "#{path}index.html", path_info: conn.path_info ++ ["index.html"]}
-    else
-      conn
-    end
+  match "*path" do
+    file_path = Path.join([@output_path | path])
+    handle_request(conn, file_path)
   end
 
-  def not_found(conn, _) do
-    send_resp(conn, 404, "not found")
+  @impl Plug.ErrorHandler
+  def handle_errors(conn, %{kind: _kind, reason: _reason, stack: _stack}) do
+    send_resp(conn, conn.status, "Something went wrong")
+  end
+
+  def handle_request(conn, file_path) do
+    mime_type = MIME.from_path(file_path)
+
+    case File.read(file_path) do
+      {:ok, body} ->
+        conn
+        |> put_resp_content_type(mime_type)
+        |> send_resp(200, body)
+
+      {:error, :enoent} ->
+        conn
+        |> put_resp_content_type(mime_type)
+        |> send_resp(404, "Not found")
+
+      {:error, :eisdir} ->
+        # request was for a directory
+        conn
+        |> handle_request(Path.join(file_path, "index.html"))
+    end
   end
 end
