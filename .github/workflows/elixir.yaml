@@ -75,7 +75,7 @@ jobs:
     - name: Check Formatting
       run: mix format --check-formatted
 
-    - name: Credo
+    - name: Lint
       run: mix credo
 
     - name: Run tests
