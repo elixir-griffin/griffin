@@ -1,43 +1,52 @@
 defmodule GriffinSSG.Web.Plug do
+  @moduledoc """
+  Defines a simple HTTP server with LiveReload. Spawned from the `grf.server` task.
+  PlugLiveReload doesn't work within the context of a Plug.Builder, so we can't use
+  Plug.Static to serve the files. Instead, we use Plug.Router and need to implement
+  the file serving logic, which is... unfortunate.
+  """
   use Plug.Router
-  use Plug.Debugger
   use Plug.ErrorHandler
 
-  plug(PlugLiveReload)
-  plug(Plug.Logger, log: :debug)
-  plug(:match)
-  plug(:dispatch)
+  plug PlugLiveReload
 
-  @output_path Application.compile_env(:griffin_ssg, :output_path, "_site")
+  plug :match
+  plug :dispatch
 
   match "*path" do
-    file_path = Path.join([@output_path | path])
-    handle_request(conn, file_path)
+    expanded_path =
+      [output_dir() | path]
+      |> Path.join()
+      |> Path.expand()
+
+    cond do
+      File.exists?(expanded_path) and File.dir?(expanded_path) ->
+        send_file(conn, Path.join(expanded_path, "index.html"))
+
+      true ->
+        send_file(conn, expanded_path)
+    end
+  end
+
+  defp send_file(conn, path) do
+    case File.read(path) do
+      {:ok, file} ->
+        conn
+        |> put_resp_content_type(MIME.from_path(path))
+        |> send_resp(200, file)
+
+      {:error, :enoent} ->
+        send_resp(conn, 404, "not found")
+    end
+
   end
 
   @impl Plug.ErrorHandler
-  def handle_errors(conn, %{kind: _kind, reason: _reason, stack: _stack}) do
-    send_resp(conn, conn.status, "Something went wrong")
+  def handle_errors(conn, _) do
+    send_resp(conn, conn.status, "internal server error")
   end
 
-  def handle_request(conn, file_path) do
-    mime_type = MIME.from_path(file_path)
-
-    case File.read(file_path) do
-      {:ok, body} ->
-        conn
-        |> put_resp_content_type(mime_type)
-        |> send_resp(200, body)
-
-      {:error, :enoent} ->
-        conn
-        |> put_resp_content_type(mime_type)
-        |> send_resp(404, "Not found")
-
-      {:error, :eisdir} ->
-        # request was for a directory
-        conn
-        |> handle_request(Path.join(file_path, "index.html"))
-    end
+  defp output_dir do
+    Application.get_env(:griffin, :output, "_site")
   end
 end
