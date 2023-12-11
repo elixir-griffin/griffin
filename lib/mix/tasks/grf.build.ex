@@ -547,8 +547,9 @@ defmodule Mix.Tasks.Grf.Build do
     output
   end
 
+  # TODO refactor, this function shares much of the logic of render_file.
   @doc false
-  def render_file22222(
+  def render_collection_file(
         file,
         %{
           page: page,
@@ -609,7 +610,7 @@ defmodule Mix.Tasks.Grf.Build do
     # render /tags/ page listing all tags
     # render /tags/:tag page listing all pages with that tag
     for {collection_name, collection_values} <- collections do
-      render_file22222(
+      render_collection_file(
         opts.output <> "/#{collection_name}/index.html",
         %{
           page: nil,
@@ -627,7 +628,7 @@ defmodule Mix.Tasks.Grf.Build do
       for {collection_value, collection_value_pages} <- collection_values do
         collection_value = collection_value |> Atom.to_string() |> Slug.slugify()
 
-        render_file22222(
+        render_collection_file(
           opts.output <> "/#{collection_name}/#{collection_value}/index.html",
           %{
             page: nil,
