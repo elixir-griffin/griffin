@@ -72,7 +72,7 @@ jobs:
     - name: Compiles without warnings
       run: mix compile --warnings-as-errors
 
-    - name: Check Formatted
+    - name: Check Formatting
       run: mix format --check-formatted
 
     - name: Credo
