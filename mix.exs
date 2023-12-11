@@ -61,7 +61,10 @@ defmodule Griffin.MixProject do
       {:makeup_html, "~> 0.1", only: :dev, runtime: false},
 
       # test dependencies
-      {:assertions, "~> 0.19"}
+      {:assertions, "~> 0.19"},
+
+      # dev and test dependencies
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -108,7 +111,8 @@ defmodule Griffin.MixProject do
 
   defp aliases do
     [
-      "archive.build": &raise_on_archive_build/1
+      "archive.build": &raise_on_archive_build/1,
+      lint: ["format", "credo"]
     ]
   end
 

@@ -8,10 +8,10 @@ defmodule GriffinSSG.Web.Plug do
   use Plug.Router
   use Plug.ErrorHandler
 
-  plug PlugLiveReload
+  plug(PlugLiveReload)
 
-  plug :match
-  plug :dispatch
+  plug(:match)
+  plug(:dispatch)
 
   match "*path" do
     expanded_path =
@@ -19,12 +19,10 @@ defmodule GriffinSSG.Web.Plug do
       |> Path.join()
       |> Path.expand()
 
-    cond do
-      File.exists?(expanded_path) and File.dir?(expanded_path) ->
-        send_file(conn, Path.join(expanded_path, "index.html"))
-
-      true ->
-        send_file(conn, expanded_path)
+    if File.exists?(expanded_path) and File.dir?(expanded_path) do
+      send_file(conn, Path.join(expanded_path, "index.html"))
+    else
+      send_file(conn, expanded_path)
     end
   end
 
@@ -38,7 +36,6 @@ defmodule GriffinSSG.Web.Plug do
       {:error, :enoent} ->
         send_resp(conn, 404, "not found")
     end
-
   end
 
   @impl Plug.ErrorHandler
