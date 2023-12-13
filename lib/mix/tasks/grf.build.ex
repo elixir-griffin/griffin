@@ -750,7 +750,7 @@ defmodule Mix.Tasks.Grf.Build do
       Mix.shell().info("#{string_col_name}: #{collections_pretty_print}")
 
       for {value, files} <- collections do
-        files_pretty_print = Enum.map_join(files, fn metadata -> metadata.input end, ",")
+        files_pretty_print = Enum.map_join(files, ",", fn metadata -> metadata.input end)
 
         Mix.shell().info("#{string_col_name} #{value}: #{files_pretty_print}")
       end
