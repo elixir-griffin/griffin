@@ -46,9 +46,9 @@ defmodule Griffin.MixProject do
   defp deps do
     [
       {:earmark, "~> 1.4"},
-      {:file_system, "~> 1.0", override: true},
+      {:file_system, "~> 1.0"},
       {:plug_cowboy, "~> 2.6"},
-      {:plug_live_reload, "~> 0.1.0"},
+      {:plug_live_reload, github: "goncalotomas/plug_live_reload"},
       {:slugify, "~> 1.3"},
       {:yaml_elixir, "~> 2.9"},
 
@@ -60,7 +60,7 @@ defmodule Griffin.MixProject do
       {:assertions, "~> 0.19"},
 
       # dev and test dependencies
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7.2-rc.2", only: [:dev, :test], runtime: false}
     ]
   end
 
