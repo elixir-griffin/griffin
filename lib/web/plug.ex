@@ -1,33 +1,49 @@
 defmodule GriffinSSG.Web.Plug do
   @moduledoc """
-  <%= @app_module %> Cowboy Plug to serve files from the output directory
-  WARNING: This is a simple webserver written only to serve files from disk.
-  It is meant only for usage in development environments. Please do not use
-  this as a means to serve your generated website.
+  Defines a simple HTTP server with LiveReload. Spawned from the `grf.server` task.
+  PlugLiveReload doesn't work within the context of a Plug.Builder, so we can't use
+  Plug.Static to serve the files. Instead, we use Plug.Router and need to implement
+  the file serving logic, which is... unfortunate.
   """
+  use Plug.Router
+  use Plug.ErrorHandler
 
-  @output_path Application.compile_env(:griffin_ssg, :output_path, "_site")
+  plug(PlugLiveReload)
 
-  use Plug.Builder
+  plug(:match)
+  plug(:dispatch)
 
-  plug(:implicit_index_html)
+  match "*path" do
+    expanded_path =
+      [output_dir() | path]
+      |> Path.join()
+      |> Path.expand()
 
-  plug(Plug.Static, at: "/", from: @output_path)
-
-  plug(:not_found)
-
-  def implicit_index_html(conn, _) do
-    path = conn.request_path
-
-    if Path.extname(path) == "" do
-      path = if String.ends_with?(path, "/"), do: path, else: "#{path}/"
-      %{conn | request_path: "#{path}index.html", path_info: conn.path_info ++ ["index.html"]}
+    if File.exists?(expanded_path) and File.dir?(expanded_path) do
+      send_file(conn, Path.join(expanded_path, "index.html"))
     else
-      conn
+      send_file(conn, expanded_path)
     end
   end
 
-  def not_found(conn, _) do
-    send_resp(conn, 404, "not found")
+  defp send_file(conn, path) do
+    case File.read(path) do
+      {:ok, file} ->
+        conn
+        |> put_resp_content_type(MIME.from_path(path))
+        |> send_resp(200, file)
+
+      {:error, :enoent} ->
+        send_resp(conn, 404, "not found")
+    end
+  end
+
+  @impl Plug.ErrorHandler
+  def handle_errors(conn, _) do
+    send_resp(conn, conn.status, "internal server error")
+  end
+
+  defp output_dir do
+    Application.get_env(:griffin, :output, "_site")
   end
 end

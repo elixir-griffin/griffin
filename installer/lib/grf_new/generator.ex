@@ -17,7 +17,7 @@ defmodule Grf.New.Generator do
       {"/config/config.exs", "/config/config.exs"},
 
       {"/lib/app_name.ex", "/lib/#{project.app_name}.ex"},
-      {"/priv/content/index.md", "/priv/content/index.md"},
+      {"/priv/content/index.md", "/src/index.md"},
       {"/priv/layouts/default.html.eex", "/lib/layouts/default.html.eex"},
 
       {"/gitignore", "/.gitignore"},
@@ -54,10 +54,10 @@ defmodule Grf.New.Generator do
 
   defp eex_metadata(project) do
     [
-      griffin_dep: "{:griffin_ssg, \"~> 0.1\"}",
+      griffin_dep: "{:griffin_ssg, \"~> 0.3\"}",
       griffin_github_version_tag: @version,
       output_path: "_site",
-      input_path: "priv",
+      input_path: "src",
       app_module: project.module,
       app_name: project.app_name,
       version: project.version

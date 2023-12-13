@@ -1,51 +1,13 @@
 defmodule GriffinSSG.Layouts do
+  @moduledoc """
+  Module responsible for compiling layouts. Stores compiled layouts in an ETS table.
+  Supports nested layouts with a maximum nesting depth of 10.
+  """
+
   @layout_extnames [".eex"]
   @layouts_max_nesting_level 10
   @compiled_layouts_table :griffin_build_layouts
   @layout_strings_table :griffin_build_layout_strings
-
-  # def render(layout, options) do
-  #   assigns = Map.get(options, :assigns, %{})
-  #   rerender_partials = Map.get(options, :rerender_partials, true)
-
-  #   content =
-  #     options
-  #     |> Map.fetch!(:content)
-  #     |> EEx.eval_string(assigns: assigns)
-  #     |> then(fn content_string ->
-  #       case Map.get(options, :content_type, ".md") do
-  #         md when md in [".md", ".markdown"] ->
-  #           Earmark.as_html!(content_string)
-
-  #         ".eex" ->
-  #           content_string
-  #       end
-  #     end)
-
-  #   layout_assigns =
-  #     assigns
-  #     |> Map.put(:content, content)
-  #     # here we're re-rendering all existing partials when we might only need a very small subset.
-  #     # TODO render only required partials by looking at args in the quoted expression for `layout`
-  #     |> then(fn current_assigns ->
-  #       if rerender_partials do
-  #         Map.update(current_assigns, :partials, %{}, fn partials ->
-  #           partials
-  #           |> Enum.map(fn partial ->
-  #             {compiled, _bindings} = Code.eval_quoted(partial, assigns: current_assigns)
-  #             compiled
-  #           end)
-  #           |> Enum.into(%{})
-  #         end)
-  #       else
-  #         current_assigns
-  #       end
-  #     end)
-  #     |> Enum.to_list()
-
-  #   {result, _bindings} = Code.eval_quoted(layout, assigns: layout_assigns)
-  #   result
-  # end
 
   def compile_layouts(layouts_dir) do
     try do
@@ -223,6 +185,8 @@ defmodule GriffinSSG.Layouts do
 
         pattern =
           Enum.reduce(content_patterns, "<%= @content %>", fn pattern, acc ->
+            # refactor: reduce nesting level by pulling parts into separate functions.
+            # credo:disable-for-next-line
             if String.contains?(parent_layout, pattern) do
               pattern
             else

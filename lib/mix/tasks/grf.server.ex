@@ -4,44 +4,84 @@ defmodule Mix.Tasks.Grf.Server do
   @shortdoc "Generates a static website and listens for changes."
 
   @moduledoc """
-  Starts the application by configuring all endpoints servers to run.
-  Note: to start the endpoint without using this mix task you must set
-  `server: true` in your `Phoenix.Endpoint` configuration.
-  ## Command line options
-    * `--open` - open browser window for each started endpoint
-  Furthermore, this task accepts the same command-line options as
-  `mix run`.
-  For example, to run `phx.server` without recompiling:
-      $ mix phx.server --no-compile
-  The `--no-halt` flag is automatically added.
-  Note that the `--no-deps-check` flag cannot be used this way,
-  because Mix needs to check dependencies to find `phx.server`.
-  To run `phx.server` without checking dependencies, you can run:
-      $ mix do deps.loadpaths --no-deps-check, phx.server
+  Starts up a local development server using plug_cowboy.
+  The local server watches for file changes and re-runs grf.build
+  on file change, but does not reload the file in the browser.
+  This server is NOT meant to be run in production.
   """
+  require Logger
+
+  @requirements ["app.config", "grf.build"]
+  @default_port "4123"
+
+  @switches [
+    port: :integer
+  ]
+
+  @aliases [
+    p: :port
+  ]
 
   @impl Mix.Task
   def run(args) do
-    port = GriffinSSGApp.http_port()
-    Application.put_env(:griffin_ssg, :server, true, persistent: true)
-    Mix.shell().info("Starting webserver on http://localhost:#{port}")
-    Mix.Tasks.Run.run(open_args(args) ++ run_args())
-  end
+    {opts, _parsed} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
+    opts = Map.new(opts)
 
-  defp iex_running? do
-    Code.ensure_loaded?(IEx) and IEx.started?()
-  end
+    # load code and start dependencies, including cowboy
+    {:ok, _} = Application.ensure_all_started([:griffin_ssg])
 
-  defp open_args(args) do
-    if "--open" in args do
-      Application.put_env(:griffin_ssg, :browser_open, true)
-      args -- ["--open"]
-    else
-      args
+    port = http_port(opts)
+
+    input_directories = [
+      Application.get_env(:griffin_ssg, :input, "src"),
+      Application.get_env(:griffin_ssg, :layouts, "lib/layouts")
+    ]
+
+    live_reload_watch_dirs = [
+      ~r"#{Application.get_env(:griffin_ssg, :output, "_site")}/*"
+    ]
+
+    Application.put_env(:plug_live_reload, :patterns, live_reload_watch_dirs)
+
+    on_file_change_callback = fn ->
+      # Can we do more clever builds here? (e.g. building only changed files)
+      Mix.Tasks.Grf.Build.run([])
     end
+
+    children = [
+      {Plug.Cowboy,
+       scheme: :http, plug: GriffinSSG.Web.Plug, options: [port: port, dispatch: dispatch()]},
+      {GriffinSSG.Filesystem.Watcher, [input_directories, on_file_change_callback]}
+    ]
+
+    # disable debug logs from plug_live_reload
+    Logger.configure(level: :info)
+
+    Mix.shell().info("Starting webserver on http://localhost:#{port}")
+    Supervisor.start_link(children, strategy: :one_for_one, name: Grf.Server.Supervisor)
+
+    Process.sleep(:infinity)
   end
 
-  defp run_args do
-    if iex_running?(), do: [], else: ["--no-halt"]
+  # refactor: consider having a centralized place for reading configuration values
+  # that are overridable in different ways.
+  def http_port(opts) do
+    Map.get(opts, :port) || Application.get_env(:griffin_ssg, :http_port) ||
+      parse_int(System.get_env("GRIFFIN_HTTP_PORT", @default_port))
+  end
+
+  defp parse_int(string) do
+    {integer, _remainder} = Integer.parse(string)
+    integer
+  end
+
+  defp dispatch() do
+    [
+      {:_,
+       [
+         {"/plug_live_reload/socket", PlugLiveReload.Socket, []},
+         {:_, Plug.Cowboy.Handler, {GriffinSSG.Web.Plug, []}}
+       ]}
+    ]
   end
 end

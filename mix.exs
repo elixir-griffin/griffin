@@ -29,11 +29,7 @@ defmodule Griffin.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      mod: {GriffinSSGApp, []},
-      extra_applications: [:logger, :eex],
-      env: [
-        browser_open: false
-      ]
+      extra_applications: [:logger, :eex]
     ]
   end
 
@@ -49,17 +45,22 @@ defmodule Griffin.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:yaml_elixir, "~> 2.9"},
       {:earmark, "~> 1.4"},
+      {:file_system, "~> 1.0", override: true},
       {:plug_cowboy, "~> 2.6"},
+      {:plug_live_reload, "~> 0.1.0"},
       {:slugify, "~> 1.3"},
+      {:yaml_elixir, "~> 2.9"},
 
       # dev dependencies
       {:ex_doc, "~> 0.29", only: :dev, runtime: false},
       {:makeup_html, "~> 0.1", only: :dev, runtime: false},
 
       # test dependencies
-      {:assertions, "~> 0.19"}
+      {:assertions, "~> 0.19"},
+
+      # dev and test dependencies
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -106,7 +107,8 @@ defmodule Griffin.MixProject do
 
   defp aliases do
     [
-      "archive.build": &raise_on_archive_build/1
+      "archive.build": &raise_on_archive_build/1,
+      lint: ["format", "credo"]
     ]
   end
 

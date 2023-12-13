@@ -14,8 +14,7 @@ defmodule GriffinSSG.Filesystem do
   and only some of the files might have been copied.
   """
   def copy_all(files, destination) do
-    ## TODO LOOP OVER FILES AND EITHER CALL CP_R OR CP,
-    ## THIS CODE DOES NOT WORK WITH RELATIVE AND ABSOLUTE PATHS
+    # refactor: this code does not work with both relative and absolute paths.
     files
     |> Enum.flat_map(&list_all(&1))
     |> Enum.reduce({:ok, 0}, fn path, acc ->

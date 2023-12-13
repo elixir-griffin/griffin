@@ -24,8 +24,8 @@ jobs:
       # Specify the OTP and Elixir versions to use when building
       # and running the workflow steps.
       matrix:
-        otp: ['25.3']       # Define the OTP version [required]
-        elixir: ['1.14']    # Define the elixir version [required]
+        otp: ['26.1']       # Define the OTP version [required]
+        elixir: ['1.15']    # Define the elixir version [required]
     steps:
     # Step: Setup Elixir + Erlang image as the base.
     - name: Set up Elixir
@@ -65,22 +65,18 @@ jobs:
           ${{ runner.os }}-mix-${{ env.cache-name }}-
           ${{ runner.os }}-mix-
 
-    # Step: Download project dependencies. If unchanged, uses
-    # the cached version.
+    # If unchanged, uses the cached version.
     - name: Install dependencies
       run: mix deps.get
 
-    # Step: Compile the project treating any warnings as errors.
-    # Customize this step if a different behavior is desired.
     - name: Compiles without warnings
       run: mix compile --warnings-as-errors
 
-    # Step: Check that the checked in code has already been formatted.
-    # This step fails if something was found unformatted.
-    # Customize this step as desired.
     - name: Check Formatting
       run: mix format --check-formatted
 
-    # Step: Execute the tests.
+    - name: Lint
+      run: mix credo
+
     - name: Run tests
       run: mix test --no-start
