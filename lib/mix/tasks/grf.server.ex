@@ -14,12 +14,23 @@ defmodule Mix.Tasks.Grf.Server do
   @requirements ["app.config", "grf.build"]
   @default_port "4123"
 
+  @switches [
+    port: :integer
+  ]
+
+  @aliases [
+    p: :port
+  ]
+
   @impl Mix.Task
   def run(args) do
+    {opts, _parsed} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
+    opts = Map.new(opts)
+
     # load code and start dependencies, including cowboy
     {:ok, _} = Application.ensure_all_started([:griffin_ssg])
 
-    port = http_port()
+    port = http_port(opts)
 
     input_directories = [
       Application.get_env(:griffin_ssg, :input, "src"),
@@ -52,17 +63,19 @@ defmodule Mix.Tasks.Grf.Server do
     Process.sleep(:infinity)
   end
 
-  def http_port do
-    fallback =
-      "GRIFFIN_HTTP_PORT"
-      |> System.get_env(@default_port)
-      |> Integer.parse()
-      |> then(fn {integer, _remainder} -> integer end)
-
-    Application.get_env(:griffin_ssg, :http_port, fallback)
+  # refactor: consider having a centralized place for reading configuration values
+  # that are overridable in different ways.
+  def http_port(opts) do
+    Map.get(opts, :port) || Application.get_env(:griffin_ssg, :http_port) ||
+      parse_int(System.get_env("GRIFFIN_HTTP_PORT", @default_port))
   end
 
-  def dispatch() do
+  defp parse_int(string) do
+    {integer, _remainder} = Integer.parse(string)
+    integer
+  end
+
+  defp dispatch() do
     [
       {:_,
        [
