@@ -80,10 +80,12 @@ defmodule GriffinSSG do
       assigns
       |> Map.put(:content, content)
       # here we're re-rendering all existing partials when we might only need a very small subset.
-      # TODO render only required partials by looking at args in the quoted expression for `layout`
+      # refactor: render only required partials by looking at args in the quoted expression for `layout`
       |> then(fn current_assigns ->
         if rerender_partials do
           Map.update(current_assigns, :partials, %{}, fn partials ->
+            # refactor: reduce nesting level by pulling parts into separate functions.
+            # credo:disable-for-lines:3
             partials
             |> Enum.map(fn partial ->
               {compiled, _bindings} = Code.eval_quoted(partial, assigns: current_assigns)

@@ -29,11 +29,7 @@ defmodule Griffin.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      mod: {GriffinSSGApp, []},
-      extra_applications: [:logger, :eex],
-      env: [
-        browser_open: false
-      ]
+      extra_applications: [:logger, :eex]
     ]
   end
 

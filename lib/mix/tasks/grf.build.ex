@@ -392,7 +392,7 @@ defmodule Mix.Tasks.Grf.Build do
         collections =
           opts.collections
           |> Enum.map(fn {collection_name, config} ->
-            # terrible efficiency, we're traversing the parsed list files
+            # refactor: terrible efficiency, we're traversing the parsed list files
             # once per collection. Since most sites will have 1-2 collections max,
             # we're fine with this for now.
             {collection_name,
@@ -404,7 +404,7 @@ defmodule Mix.Tasks.Grf.Build do
 
         tasks =
           for metadata <- parsed_files do
-            # TODO consider setting collections globally on ETS or persistent term
+            # refactor: consider setting collections globally on ETS or persistent term
             Task.Supervisor.async_nolink(
               sup,
               __MODULE__,
@@ -547,7 +547,7 @@ defmodule Mix.Tasks.Grf.Build do
     output
   end
 
-  # TODO refactor, this function shares much of the logic of render_file.
+  # refactor: this function shares much of the logic of render_file.
   @doc false
   def render_collection_file(
         file,
@@ -701,6 +701,8 @@ defmodule Mix.Tasks.Grf.Build do
           |> maybe_parse_csv()
           |> Filesystem.copy_all(opts.output)
           |> then(fn result ->
+            # refactor: reduce nesting level by pulling parts into separate functions.
+            # credo:disable-for-next-line
             case result do
               {:ok, count} -> count
               {:errors, list_errors} -> Mix.raise(hd(list_errors))
@@ -748,10 +750,7 @@ defmodule Mix.Tasks.Grf.Build do
       Mix.shell().info("#{string_col_name}: #{collections_pretty_print}")
 
       for {value, files} <- collections do
-        files_pretty_print =
-          files
-          |> Enum.map(fn metadata -> metadata.input end)
-          |> Enum.join(",")
+        files_pretty_print = Enum.map_join(files, fn metadata -> metadata.input end, ",")
 
         Mix.shell().info("#{string_col_name} #{value}: #{files_pretty_print}")
       end

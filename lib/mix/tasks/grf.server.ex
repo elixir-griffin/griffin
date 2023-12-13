@@ -8,43 +8,47 @@ defmodule Mix.Tasks.Grf.Server do
   The local server watches for file changes and re-runs grf.build
   on file change, but does not reload the file in the browser.
   This server is NOT meant to be run in production.
-  ## Command line options
-    * `--open` - open browser window for each started endpoint
-  Furthermore, this task accepts the same command-line options as
-  `mix run`.
-  For example, to run `grf.server` without recompiling:
-      $ mix grf.server --no-compile
-  The `--no-halt` flag is automatically added.
-  Note that the `--no-deps-check` flag cannot be used this way,
-  because Mix needs to check dependencies to find `grf.server`.
-  To run `grf.server` without checking dependencies, you can run:
-      $ mix do deps.loadpaths --no-deps-check, grf.server
   """
+  require Logger
 
-  @requirements ["app.start", "grf.build"]
+  @requirements ["app.config", "grf.build"]
   @default_port "4123"
 
   @impl Mix.Task
   def run(args) do
-    port = http_port()
-    Mix.shell().info("Starting webserver on http://localhost:#{port}")
-    input_directories = Application.get_env(:griffin_ssg, :input, "src")
+    # load code and start dependencies, including cowboy
+    {:ok, _} = Application.ensure_all_started([:griffin_ssg])
 
-    Application.put_env(:plug_live_reload, :patterns, [
-      ~r"#{Application.get_env(:griffin_ssg, :output)}/*"
-    ])
+    port = http_port()
+
+    input_directories = [
+      Application.get_env(:griffin_ssg, :input, "src"),
+      Application.get_env(:griffin_ssg, :layouts, "lib/layouts")
+    ]
+
+    live_reload_watch_dirs = [
+      ~r"#{Application.get_env(:griffin_ssg, :output, "_site")}/*"
+    ]
+
+    Application.put_env(:plug_live_reload, :patterns, live_reload_watch_dirs)
+
+    on_file_change_callback = fn ->
+      # Can we do more clever builds here? (e.g. building only changed files)
+      Mix.Tasks.Grf.Build.run([])
+    end
 
     children = [
       {Plug.Cowboy,
-       scheme: :http,
-       plug: GriffinSSG.Web.Plug,
-       options: [port: http_port(), dispatch: dispatch()]},
-      {GriffinSSG.Filesystem.Watcher, [input_directories]}
+       scheme: :http, plug: GriffinSSG.Web.Plug, options: [port: port, dispatch: dispatch()]},
+      {GriffinSSG.Filesystem.Watcher, [input_directories, on_file_change_callback]}
     ]
 
+    # disable debug logs from plug_live_reload
+    Logger.configure(level: :info)
+
+    Mix.shell().info("Starting webserver on http://localhost:#{port}")
     Supervisor.start_link(children, strategy: :one_for_one, name: Grf.Server.Supervisor)
 
-    # Mix.Tasks.Run.run(open_args(args) ++ run_args())
     Process.sleep(:infinity)
   end
 

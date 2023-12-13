@@ -1,4 +1,6 @@
 defmodule GriffinFileHelper do
+  @moduledoc false
+
   import ExUnit.Assertions
 
   def assert_files_equal(left, right) do
