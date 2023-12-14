@@ -21,6 +21,7 @@ defmodule GriffinSSG.Layouts do
     layout_partials_dir = layouts_dir <> "/partials"
 
     layout_files = GriffinSSG.Filesystem.search_directory(layouts_dir, @layout_extnames)
+
     layout_names =
       Enum.map(layout_files, fn filename ->
         filename
