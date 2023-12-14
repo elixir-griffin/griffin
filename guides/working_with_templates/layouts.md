@@ -8,7 +8,7 @@ To denote that a piece of content should be wrapped in a template, use the layou
 layout: cool_layout
 title: My Cool Griffin Blog Post
 ---
-# <%= title %>
+# <%= @title %>
 ```
 
 This will look for a `cool_layout.eex` EEx file in your *layouts* folder at `lib/layouts/cool_layout.eex`.

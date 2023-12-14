@@ -21,7 +21,15 @@ defmodule GriffinSSG.Layouts do
     layout_partials_dir = layouts_dir <> "/partials"
 
     layout_files = GriffinSSG.Filesystem.search_directory(layouts_dir, @layout_extnames)
-    layout_names = Enum.map(layout_files, &Path.basename(&1, Path.extname(&1)))
+
+    layout_names =
+      Enum.map(layout_files, fn filename ->
+        filename
+        |> Path.basename()
+        |> String.split(".")
+        |> hd()
+      end)
+
     num_layouts = length(layout_files)
 
     result =
@@ -48,9 +56,19 @@ defmodule GriffinSSG.Layouts do
         # compile partials
         partials =
           Enum.reduce(partial_layouts, %{}, fn filepath, acc ->
+            # Using Path.extname/1 doesn't work here because layout files
+            # can use multiple extensions (e.g. root.html.eex).
+            # Additionally, for partials, we specifically convert the name
+            # into an atom so it can be referred in a layout as @partials.name.
+            layout_name =
+              Path.basename(filepath)
+              |> String.split(".")
+              |> hd()
+              |> String.to_atom()
+
             Map.put(
               acc,
-              String.to_atom(Path.basename(filepath, Path.extname(filepath))),
+              layout_name,
               EEx.compile_file(filepath)
             )
           end)
@@ -134,7 +152,12 @@ defmodule GriffinSSG.Layouts do
   defp compile_layouts_rec([], not_compiled, _layout_names), do: not_compiled
 
   defp compile_layouts_rec([file | remaining], acc, layout_names) do
-    layout_name = Path.basename(file, Path.extname(file))
+    # Using Path.extname/1 doesn't work here because layout files
+    # can use multiple extensions (e.g. root.html.eex)
+    layout_name =
+      Path.basename(file)
+      |> String.split(".")
+      |> hd()
 
     layout =
       file
@@ -171,9 +194,9 @@ defmodule GriffinSSG.Layouts do
       if parent_layout == nil do
         {:error, :parent_layout_not_found}
       else
-        # there is currently no better way of doing this that I know of,
-        # since compiled or eval'ed EEx strings replace all variables
-        # and we only want to replace @content.
+        # refactor: there is currently no better way of doing this
+        # that I know of, since compiled or eval'ed EEx strings
+        # replace all variables and we only want to replace @content.
         # This isn't ideal because users might use different spacing
         # which wouldn't work with the way we're merging the layouts.
         content_patterns = [
