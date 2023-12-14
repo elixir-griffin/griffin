@@ -48,7 +48,7 @@ defmodule Griffin.MixProject do
       {:earmark, "~> 1.4"},
       {:file_system, "~> 1.0"},
       {:plug_cowboy, "~> 2.6"},
-      {:plug_live_reload, github: "goncalotomas/plug_live_reload"},
+      {:plug_live_reload, "~> 0.2"},
       {:slugify, "~> 1.3"},
       {:yaml_elixir, "~> 2.9"},
 
