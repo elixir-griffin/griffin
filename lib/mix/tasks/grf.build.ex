@@ -267,6 +267,7 @@ defmodule Mix.Tasks.Grf.Build do
     :debug,
     :dry_run,
     :hooks,
+    :plugins,
     :ignore,
     :input,
     :layouts,
@@ -285,7 +286,8 @@ defmodule Mix.Tasks.Grf.Build do
     ignore: [],
     hooks: %{
       before: [],
-      after: []
+      after: [],
+      post_parse: []
     },
     quiet: false,
     dry_run: false,
@@ -293,6 +295,7 @@ defmodule Mix.Tasks.Grf.Build do
     run_mode: :build,
     # in the future we might support `:json`
     output_mode: :file_system,
+    plugins: [],
     debug: false
   }
 
@@ -346,7 +349,17 @@ defmodule Mix.Tasks.Grf.Build do
 
         validate_directories!(directories, opts)
 
-        for hook <- opts.hooks.before do
+        for {plugin, plugin_opts} <- opts.plugins do
+          if Code.ensure_loaded?(plugin) do
+            {:ok, plugin_state} = plugin.init(opts, plugin_opts)
+          else
+            Mix.raise("Plugin #{plugin} specified but could not be found")
+          end
+        end
+
+        hooks = Map.merge(opts.hooks, GriffinSSG.Config.get(:hooks))
+
+        for hook <- Map.get(hooks, :before, []) do
           hook.({directories, opts.run_mode, opts.output_mode})
         end
 
@@ -356,7 +369,10 @@ defmodule Mix.Tasks.Grf.Build do
           |> fetch_assigns_from_data_dir()
           |> Map.merge(%{griffin: @griffin})
 
+        # refactor: eventually we want to handle configuration
+        # exclusively through GriffinSSG.Config
         opts = Map.put(opts, :global_assigns, global_assigns)
+        GriffinSSG.Config.put(:global_assigns, global_assigns)
 
         copy_passthrough_files!(opts)
 
@@ -389,18 +405,9 @@ defmodule Mix.Tasks.Grf.Build do
             Task.await(task, :infinity)
           end
 
-        collections =
-          opts.collections
-          |> Enum.map(fn {collection_name, config} ->
-            # refactor: terrible efficiency, we're traversing the parsed list files
-            # once per collection. Since most sites will have 1-2 collections max,
-            # we're fine with this for now.
-            {collection_name,
-             compile_collection(collection_name, parsed_files, Map.merge(opts, config))}
-          end)
-          |> Enum.into(%{})
-
-        opts = Map.put(opts, :collections, collections)
+        for hook <- Map.get(hooks, :post_parse, []) do
+          hook.({directories, parsed_files, opts.run_mode, opts.output_mode})
+        end
 
         tasks =
           for metadata <- parsed_files do
@@ -419,9 +426,7 @@ defmodule Mix.Tasks.Grf.Build do
             Task.await(task, :infinity)
           end
 
-        render_collections_pages(collections, opts)
-
-        for hook <- opts.hooks.after do
+        for hook <- Map.get(hooks, :after, []) do
           hook.({directories, results, opts.run_mode, opts.output_mode})
         end
 
@@ -499,21 +504,17 @@ defmodule Mix.Tasks.Grf.Build do
         opts
       ) do
     layout_name = Map.get(data, :layout, "__fallback__")
-
-    layout_assigns =
-      filters_assigns()
-      |> Map.merge(shortcodes_assigns())
-      |> Map.merge(partials_assigns())
-      |> Map.merge(opts.global_assigns)
-      |> Map.merge(%{page: page, collections: opts.collections})
-      |> Map.merge(data)
-      |> Map.put_new(:title, "Griffin")
-
     layout = fetch_layout(layout_name)
 
     if layout == nil do
       Mix.raise("File #{file} specified layout `#{layout_name}` but no such layout was found")
     end
+
+    layout_assigns =
+      opts.global_assigns
+      |> Map.merge(%{page: page, collections: opts.collections})
+      |> Map.merge(data)
+      |> Map.put_new(:title, "Griffin")
 
     output =
       GriffinSSG.render(
@@ -545,106 +546,6 @@ defmodule Mix.Tasks.Grf.Build do
     end
 
     output
-  end
-
-  # refactor: this function shares much of the logic of render_file.
-  @doc false
-  def render_collection_file(
-        file,
-        %{
-          page: page,
-          data: data,
-          content: content,
-          input: input_path
-        },
-        opts
-      ) do
-    layout = Map.fetch!(data, :layout)
-
-    layout_assigns =
-      filters_assigns()
-      |> Map.merge(shortcodes_assigns())
-      |> Map.merge(partials_assigns())
-      |> Map.merge(opts.global_assigns)
-      |> Map.merge(%{page: page, collections: opts.collections})
-      |> Map.merge(data)
-      |> Map.put_new(:title, "Griffin")
-
-    output =
-      GriffinSSG.render(
-        layout,
-        %{
-          content_type: Path.extname(input_path),
-          content: content,
-          assigns: layout_assigns,
-          rerender_partials: false
-        }
-      )
-
-    unless opts.quiet do
-      Mix.shell().info("writing: #{file}")
-    end
-
-    unless opts.dry_run do
-      file
-      |> Path.dirname()
-      |> Path.expand()
-      |> File.mkdir_p()
-
-      case File.write(file, output) do
-        :ok ->
-          :ok
-
-        {:error, reason} ->
-          Mix.raise("Unable to write to #{file}: `#{reason}`")
-      end
-    end
-
-    output
-  end
-
-  defp render_collections_pages(collections, _opts) when collections == %{}, do: :ok
-
-  defp render_collections_pages(collections, opts) do
-    # Generate collections pages (example of tags below):
-    # render /tags/ page listing all tags
-    # render /tags/:tag page listing all pages with that tag
-    for {collection_name, collection_values} <- collections do
-      render_collection_file(
-        opts.output <> "/#{collection_name}/index.html",
-        %{
-          page: nil,
-          data: %{
-            layout: EEx.compile_string(Layouts.fallback_list_collection_layout()),
-            collection_name: collection_name,
-            collection_values: collection_values
-          },
-          content: "",
-          input: "tags_list.eex"
-        },
-        opts
-      )
-
-      for {collection_value, collection_value_pages} <- collection_values do
-        collection_value = collection_value |> Atom.to_string() |> Slug.slugify()
-
-        render_collection_file(
-          opts.output <> "/#{collection_name}/#{collection_value}/index.html",
-          %{
-            page: nil,
-            data: %{
-              layout: EEx.compile_string(Layouts.fallback_show_collection_layout()),
-              collection_name: collection_name,
-              collection_value: collection_value,
-              collection_value_pages: collection_value_pages
-            },
-            content: "",
-            input: "tags.eex"
-          },
-          opts
-        )
-      end
-    end
   end
 
   defp fetch_assigns_from_data_dir(opts) do
@@ -720,45 +621,6 @@ defmodule Mix.Tasks.Grf.Build do
     end
   end
 
-  defp compile_collection(collection_name, parsed_files, opts) do
-    collections =
-      parsed_files
-      |> Enum.filter(fn metadata ->
-        metadata.data[collection_name] != nil
-      end)
-      |> Enum.reduce(%{}, fn metadata, acc ->
-        collection_values = metadata.data[collection_name]
-
-        values =
-          if is_list(collection_values) do
-            collection_values
-          else
-            # single value
-            [collection_values]
-          end
-
-        Enum.reduce(values, acc, fn value, current_values ->
-          Map.update(current_values, String.to_atom(value), [metadata], fn list_files ->
-            [metadata | list_files]
-          end)
-        end)
-      end)
-
-    if opts.debug do
-      string_col_name = String.capitalize(Atom.to_string(collection_name))
-      collections_pretty_print = Enum.join(Map.keys(collections), ", ")
-      Mix.shell().info("#{string_col_name}: #{collections_pretty_print}")
-
-      for {value, files} <- collections do
-        files_pretty_print = Enum.map_join(files, ",", fn metadata -> metadata.input end)
-
-        Mix.shell().info("#{string_col_name} #{value}: #{files_pretty_print}")
-      end
-    end
-
-    collections
-  end
-
   defp compile_layouts!(opts) do
     case Layouts.compile_layouts(opts.layouts) do
       {:ok, num_layouts, num_partials} ->
@@ -826,44 +688,6 @@ defmodule Mix.Tasks.Grf.Build do
 
   defp get_app_env(key, default \\ nil) do
     Application.get_env(:griffin_ssg, key, default)
-  end
-
-  defp partials_assigns() do
-    :griffin_build_layouts
-    |> :ets.lookup(:__partials__)
-    |> then(fn [{:__partials__, partials}] ->
-      %{partials: partials}
-    end)
-  end
-
-  defp filters_assigns() do
-    Map.merge(default_filters(), get_app_env(:filters, %{}))
-  end
-
-  defp default_filters() do
-    %{
-      slugify: &Slug.slugify/1,
-      uppercase: &String.upcase/1,
-      lowercase: &String.downcase/1
-    }
-  end
-
-  defp shortcodes_assigns() do
-    Map.merge(default_shortcodes(), get_app_env(:shortcodes, %{}))
-  end
-
-  defp default_shortcodes do
-    %{
-      youtube: fn slug ->
-        """
-        <iframe width="560" height="315" src="https://www.youtube.com/embed/#{slug}"
-                title="YouTube video player" frameborder="0" allow="accelerometer;
-                autoplay; clipboard-write; encrypted-media; gyroscope;
-                picture-in-picture; web-share" allowfullscreen>
-        </iframe>
-        """
-      end
-    }
   end
 
   defp pluralize(string, 1), do: string

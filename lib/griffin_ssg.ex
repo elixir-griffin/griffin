@@ -54,12 +54,16 @@ defmodule GriffinSSG do
 
   @doc """
   Renders a layout with a given content, front matter and assigns.
+  Injects additional assigns like filters and partials.
 
   The layout is assumed to be a compiled EEx file or string, such that calling
   `Code.eval_quoted/2` on the layout will generate a correct result.
   """
   def render(layout, options) do
-    assigns = Map.get(options, :assigns, %{})
+    assigns =
+      default_assigns()
+      |> Map.merge(Map.get(options, :assigns, %{}))
+
     rerender_partials = Map.get(options, :rerender_partials, true)
 
     content =
@@ -109,5 +113,47 @@ defmodule GriffinSSG do
     parsed
     |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
     |> Enum.into(%{})
+  end
+
+  defp default_assigns do
+    partials_assigns()
+    |> Map.merge(default_filters())
+    |> Map.merge(default_shortcodes())
+    |> Map.merge(get_app_env(:filters, %{}))
+    |> Map.merge(get_app_env(:shortcodes, %{}))
+  end
+
+  defp partials_assigns() do
+    :griffin_build_layouts
+    |> :ets.lookup(:__partials__)
+    |> then(fn [{:__partials__, partials}] ->
+      %{partials: partials}
+    end)
+  end
+
+  defp default_filters() do
+    %{
+      slugify: &Slug.slugify/1,
+      uppercase: &String.upcase/1,
+      lowercase: &String.downcase/1
+    }
+  end
+
+  defp default_shortcodes do
+    %{
+      youtube: fn slug ->
+        """
+        <iframe width="560" height="315" src="https://www.youtube.com/embed/#{slug}"
+                title="YouTube video player" frameborder="0" allow="accelerometer;
+                autoplay; clipboard-write; encrypted-media; gyroscope;
+                picture-in-picture; web-share" allowfullscreen>
+        </iframe>
+        """
+      end
+    }
+  end
+
+  defp get_app_env(key, default) do
+    Application.get_env(:griffin_ssg, key, default)
   end
 end
