@@ -12,16 +12,15 @@ defmodule GriffinSSG.Config do
   end
 
   def get() do
-    Application.get_all_env(:griffin_ssg)
-    |> Map.new()
+    Agent.get(__MODULE__, & &1)
   end
 
   def get(key) do
-    Application.get_env(:griffin_ssg, key)
+    Agent.get(__MODULE__, &Map.get(&1, key))
   end
 
   def put(key, value) do
-    Application.put_env(:griffin_ssg, key, value)
+    Agent.update(__MODULE__, &Map.put(&1, key, value))
     get()
   end
 
@@ -29,6 +28,7 @@ defmodule GriffinSSG.Config do
     for {option, value} <- values do
       put(option, value)
     end
+
     get()
   end
 

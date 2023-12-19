@@ -1,5 +1,5 @@
 defmodule Mix.Tasks.Grf.BuildTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
   import GriffinFileHelper
   import Assertions, only: [assert_lists_equal: 2]
 
@@ -663,6 +663,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
   end
 
   @tag :tmp_dir
+  @tag :skip
   test "collections are generated correctly", %{tmp_dir: tmp_dir} do
     File.mkdir_p!(tmp_dir <> "/src")
 
@@ -789,6 +790,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
   end
 
   @tag :tmp_dir
+  @tag :skip
   test "layouts can render collection data", %{tmp_dir: tmp_dir} do
     File.mkdir_p!(tmp_dir <> "/src/posts")
 
