@@ -13,21 +13,23 @@ defmodule GriffinSSG.Plugin.Collections do
   alias GriffinSSG.Layouts
 
   @impl true
-  def init(_config, opts) do
-    collections_config = Keyword.get(opts, :collections)
+  def init(_opts, plugin_opts) do
+    collections_config = Keyword.get(plugin_opts, :collections)
+
     unless is_nil(collections_config) do
       GriffinSSG.Config.put(:collections_config, collections_config)
 
       GriffinSSG.Config.register_hook(:post_parse, &__MODULE__.compile_collections/1)
+
       GriffinSSG.Config.register_hook(:after, &__MODULE__.run/1)
-      |> dbg()
     end
+
     :ok
   end
 
   def compile_collections({_, parsed_files, _, _}) do
-    dbg("oink")
     opts = GriffinSSG.Config.get()
+
     collections =
       opts.collections_config
       |> Enum.map(fn {collection_name, config} ->
@@ -42,8 +44,7 @@ defmodule GriffinSSG.Plugin.Collections do
     GriffinSSG.Config.put(:collections, collections)
   end
 
-  def run({_, results, _, _}) do
-    dbg("neigh")
+  def run({_, _results, _, _}) do
     config = GriffinSSG.Config.get()
 
     render_collections_pages(config.collections, config)

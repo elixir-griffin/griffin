@@ -252,6 +252,7 @@ defmodule Mix.Tasks.Grf.Build do
 
   alias GriffinSSG.Layouts
   alias GriffinSSG.Filesystem
+  alias GriffinSSG.Config
 
   @version Mix.Project.config()[:version]
 
@@ -322,6 +323,7 @@ defmodule Mix.Tasks.Grf.Build do
 
   @input_extnames [".md", ".markdown", ".eex"]
 
+  # credo:disable-for-lines:5
   @impl Mix.Task
   def run(args, _test_opts \\ []) do
     {time_in_microseconds, files_written} =
@@ -349,15 +351,19 @@ defmodule Mix.Tasks.Grf.Build do
 
         validate_directories!(directories, opts)
 
+        {:ok, config_agent} = Config.start_link()
+        Config.put_all(opts)
+
         for {plugin, plugin_opts} <- opts.plugins do
           if Code.ensure_loaded?(plugin) do
-            {:ok, plugin_state} = plugin.init(opts, plugin_opts)
+            opts = Map.put(opts, :config_agent, config_agent)
+            {:ok, _plugin_state} = plugin.init(opts, plugin_opts)
           else
             Mix.raise("Plugin #{plugin} specified but could not be found")
           end
         end
 
-        hooks = Map.merge(opts.hooks, GriffinSSG.Config.get(:hooks))
+        hooks = Map.merge(opts.hooks, Config.get(:hooks))
 
         for hook <- Map.get(hooks, :before, []) do
           hook.({directories, opts.run_mode, opts.output_mode})
@@ -372,7 +378,7 @@ defmodule Mix.Tasks.Grf.Build do
         # refactor: eventually we want to handle configuration
         # exclusively through GriffinSSG.Config
         opts = Map.put(opts, :global_assigns, global_assigns)
-        GriffinSSG.Config.put(:global_assigns, global_assigns)
+        Config.put(:global_assigns, global_assigns)
 
         copy_passthrough_files!(opts)
 

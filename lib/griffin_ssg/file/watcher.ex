@@ -1,4 +1,4 @@
-defmodule GriffinSSG.Filesystem.Watcher do
+defmodule GriffinSSG.File.Watcher do
   @moduledoc """
   Module for non-named GenServer responsible for watching for changes.
   Executes a generic callback when file changes are detected.
@@ -8,7 +8,7 @@ defmodule GriffinSSG.Filesystem.Watcher do
 
   @swap_file_extnames [".swp", ".swx"]
 
-  def start_link([directories, callback]) do
+  def start_link(directories, callback) do
     GenServer.start_link(__MODULE__, {directories, callback})
   end
 

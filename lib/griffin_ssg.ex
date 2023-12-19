@@ -124,11 +124,16 @@ defmodule GriffinSSG do
   end
 
   defp partials_assigns() do
-    :griffin_build_layouts
-    |> :ets.lookup(:__partials__)
-    |> then(fn [{:__partials__, partials}] ->
-      %{partials: partials}
-    end)
+    try do
+      :griffin_build_layouts
+      |> :ets.lookup(:__partials__)
+      |> then(fn [{:__partials__, partials}] ->
+        %{partials: partials}
+      end)
+    rescue
+      ArgumentError ->
+        %{}
+    end
   end
 
   defp default_filters() do
