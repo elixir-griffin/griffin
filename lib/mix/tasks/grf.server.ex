@@ -52,7 +52,7 @@ defmodule Mix.Tasks.Grf.Server do
     children = [
       {Plug.Cowboy,
        scheme: :http, plug: GriffinSSG.Web.Plug, options: [port: port, dispatch: dispatch()]},
-      {GriffinSSG.File.Watcher, input_directories, on_file_change_callback}
+      {GriffinSSG.File.Watcher, {input_directories, on_file_change_callback}}
     ]
 
     # disable debug logs from plug_live_reload
