@@ -47,13 +47,9 @@ defmodule GriffinSSG.Plugin.Collections do
          compile_collection(collection_name, parsed_files, Map.merge(opts, config))}
       end)
       |> Enum.into(%{})
-
-    GriffinSSG.Config.put(:collections, collections)
   end
 
-  def run({_, _results, _, _}) do
-    config = GriffinSSG.Config.get_all()
-
+  def run({_, _results, _, _}, config) do
     render_collections_pages(config.collections, config)
   end
 
