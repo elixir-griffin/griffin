@@ -3,10 +3,6 @@ defmodule GriffinSSG.Plugin.Collections do
   The Collections plugin is responsible for creating collections of pages.
   A typical example is a blog, where you want to create a collection of all
   blog posts posts tagged with a certain tag.
-
-  Currently this doesn't work with multiple running tests due to using the
-  global config. This should be fixed by making init return a config that is
-  passed into the hooks.
   """
   @behaviour GriffinSSG.Plugin.Behaviour
 
