@@ -8,7 +8,7 @@ defmodule GriffinSSG.File.Watcher do
 
   @swap_file_extnames [".swp", ".swx"]
 
-  def start_link(directories, callback) do
+  def start_link({directories, callback}) do
     GenServer.start_link(__MODULE__, {directories, callback})
   end
 

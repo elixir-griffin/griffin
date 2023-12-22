@@ -252,7 +252,6 @@ defmodule Mix.Tasks.Grf.Build do
 
   alias GriffinSSG.Layouts
   alias GriffinSSG.Filesystem
-  alias GriffinSSG.Config
 
   @version Mix.Project.config()[:version]
 
@@ -277,6 +276,8 @@ defmodule Mix.Tasks.Grf.Build do
     :quiet
   ]
 
+  @available_hooks [:before, :after, :post_parse]
+
   @default_opts %{
     input: "src",
     output: "_site",
@@ -285,11 +286,7 @@ defmodule Mix.Tasks.Grf.Build do
     data: "data",
     passthrough_copies: [],
     ignore: [],
-    hooks: %{
-      before: [],
-      after: [],
-      post_parse: []
-    },
+    hooks: Enum.map(@available_hooks, fn hook -> {hook, []} end) |> Map.new(),
     quiet: false,
     dry_run: false,
     # in the future we might support `:watch` and `:serve`
@@ -345,29 +342,11 @@ defmodule Mix.Tasks.Grf.Build do
           input: opts.input,
           output: opts.output,
           layouts: opts.layouts,
-          partials: opts.layouts <> "/partials",
+          partials: Path.join(opts.layouts, "/partials"),
           data: opts.data
         }
 
         validate_directories!(directories, opts)
-
-        {:ok, config_agent} = Config.start_link()
-        Config.put_all(opts)
-
-        for {plugin, plugin_opts} <- opts.plugins do
-          if Code.ensure_loaded?(plugin) do
-            opts = Map.put(opts, :config_agent, config_agent)
-            {:ok, _plugin_state} = plugin.init(opts, plugin_opts)
-          else
-            Mix.raise("Plugin #{plugin} specified but could not be found")
-          end
-        end
-
-        hooks = Map.merge(opts.hooks, Config.get(:hooks))
-
-        for hook <- Map.get(hooks, :before, []) do
-          hook.({directories, opts.run_mode, opts.output_mode})
-        end
 
         # import global assigns from data directory
         global_assigns =
@@ -375,10 +354,13 @@ defmodule Mix.Tasks.Grf.Build do
           |> fetch_assigns_from_data_dir()
           |> Map.merge(%{griffin: @griffin})
 
-        # refactor: eventually we want to handle configuration
-        # exclusively through GriffinSSG.Config
-        opts = Map.put(opts, :global_assigns, global_assigns)
-        Config.put(:global_assigns, global_assigns)
+        opts =
+          opts
+          |> initialize_plugins!()
+          |> Map.put(:directories, directories)
+          |> Map.put(:global_assigns, global_assigns)
+
+        call_hooks(opts, :before, {directories, opts.run_mode, opts.output_mode})
 
         copy_passthrough_files!(opts)
 
@@ -411,9 +393,11 @@ defmodule Mix.Tasks.Grf.Build do
             Task.await(task, :infinity)
           end
 
-        for hook <- Map.get(hooks, :post_parse, []) do
-          hook.({directories, parsed_files, opts.run_mode, opts.output_mode})
-        end
+        call_hooks(
+          opts,
+          :post_parse,
+          {directories, parsed_files, opts.run_mode, opts.output_mode}
+        )
 
         tasks =
           for metadata <- parsed_files do
@@ -432,9 +416,7 @@ defmodule Mix.Tasks.Grf.Build do
             Task.await(task, :infinity)
           end
 
-        for hook <- Map.get(hooks, :after, []) do
-          hook.({directories, results, opts.run_mode, opts.output_mode})
-        end
+        call_hooks(opts, :after, {directories, results, opts.run_mode, opts.output_mode})
 
         length(results)
       end)
@@ -554,6 +536,23 @@ defmodule Mix.Tasks.Grf.Build do
     output
   end
 
+  defp call_hooks(opts, hook, arg) do
+    opts.hooks
+    |> Map.get(hook, [])
+    |> Enum.reduce(opts, fn hook, acc ->
+      case hook do
+        {name, fun} ->
+          # plugin hook, check if there's state to pass
+          state = Map.get(opts, name)
+          {:ok, new_state} = fun.(arg, state)
+          Map.put(acc, name, new_state)
+
+        fun ->
+          fun.(arg)
+      end
+    end)
+  end
+
   defp fetch_assigns_from_data_dir(opts) do
     {assigns, num_files} =
       if File.exists?(opts.data) do
@@ -639,6 +638,34 @@ defmodule Mix.Tasks.Grf.Build do
       {:error, :layout_cyclic_dependency, errored_layouts} ->
         Mix.raise("Dependency issue with layouts `[#{errored_layouts}]`")
     end
+  end
+
+  defp initialize_plugins!(opts) do
+    Enum.reduce(opts.plugins, opts, fn {plugin, plugin_opts}, acc ->
+      unless Code.ensure_loaded?(plugin) do
+        Mix.raise("Plugin #{plugin} specified but could not be found")
+      end
+
+      case plugin.init(opts, plugin_opts) do
+        {:error, reason} ->
+          Mix.raise("Plugin #{plugin} failed to initialize: #{reason}")
+
+        {:ok, %{state: state, hooks: hooks}} ->
+          invalid_hook = Enum.find(hooks, fn {hook, _} -> hook not in @available_hooks end)
+
+          unless is_nil(invalid_hook) do
+            Mix.raise("plugin #{plugin} contains invalid hook: #{elem(invalid_hook, 1)}")
+          end
+
+          acc
+          |> Map.put(plugin, state)
+          |> Map.update(:hooks, @default_opts.hooks, fn existing_hooks ->
+            Map.merge(existing_hooks, hooks, fn _hook, existing, new ->
+              existing ++ new
+            end)
+          end)
+      end
+    end)
   end
 
   defp fetch_layout(name) do

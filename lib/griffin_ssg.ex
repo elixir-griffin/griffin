@@ -26,6 +26,12 @@ defmodule GriffinSSG do
 
   """
 
+  @typedoc "a callback hook to be called during the build process"
+  @type hook :: {name :: atom(), fun :: fun()} | fun()
+
+  @typedoc "configuration of hooks used during the build process"
+  @type hooks :: %{before: list(hook()), post_parse: list(hook()), after: list(hook())}
+
   @doc """
   Parses the string contents of a file into two components: front matter and file content.
 

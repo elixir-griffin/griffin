@@ -3,5 +3,6 @@ defmodule GriffinSSG.Plugin.Behaviour do
   This is the behaviour for all plugins.
   """
 
-  @callback init(GriffinSSG.Config.t(), any()) :: GriffinSSG.Config.t()
+  @callback init(GriffinSSG.Config.t(), any()) ::
+              {:ok, %{state: term(), hooks: GriffinSSG.hooks()}}
 end

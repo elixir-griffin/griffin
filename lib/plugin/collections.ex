@@ -12,23 +12,34 @@ defmodule GriffinSSG.Plugin.Collections do
 
   alias GriffinSSG.Layouts
 
+  @collection_config_opts [:permalink, :list_layout, :show_layout]
+
   @impl true
   def init(_opts, plugin_opts) do
-    collections_config = Keyword.get(plugin_opts, :collections)
+    case validate_config(plugin_opts) do
+      {:ok, config} ->
+        config =
+          if Enum.empty?(config) do
+            config
+          else
+            %{
+              state: config,
+              hooks: %{
+                post_parse: [&__MODULE__.compile_collections/1],
+                after: [&__MODULE__.run/1]
+              }
+            }
+          end
 
-    unless is_nil(collections_config) do
-      GriffinSSG.Config.put(:collections_config, collections_config)
+        {:ok, config}
 
-      GriffinSSG.Config.register_hook(:post_parse, &__MODULE__.compile_collections/1)
-
-      GriffinSSG.Config.register_hook(:after, &__MODULE__.run/1)
+      error ->
+        error
     end
-
-    :ok
   end
 
   def compile_collections({_, parsed_files, _, _}) do
-    opts = GriffinSSG.Config.get()
+    opts = GriffinSSG.Config.get_all()
 
     collections =
       opts.collections_config
@@ -45,9 +56,54 @@ defmodule GriffinSSG.Plugin.Collections do
   end
 
   def run({_, _results, _, _}) do
-    config = GriffinSSG.Config.get()
+    config = GriffinSSG.Config.get_all()
 
     render_collections_pages(config.collections, config)
+  end
+
+  defp validate_config(plugin_opts) do
+    config = Keyword.get(plugin_opts, :collections, %{})
+
+    Enum.reduce_while(config, {:ok, config}, fn {collection, config}, acc ->
+      cond do
+        not is_atom(collection) ->
+          {:halt,
+           {:error, "expected an atom as the collection name, found #{typeof(collection)}"}}
+
+        not is_map(config) ->
+          {:halt,
+           {:error,
+            "expected a map as the config for collection `#{collection}`, found #{typeof(config)}"}}
+
+        not valid_collection?(config) ->
+          {:halt,
+           {:error, "config for collection `#{collection}` is invalid, check all required opts"}}
+
+        true ->
+          {:cont, acc}
+      end
+    end)
+  end
+
+  def typeof(arg) do
+    cond do
+      is_map(arg) -> "map"
+      is_float(arg) -> "float"
+      is_number(arg) -> "number"
+      is_atom(arg) -> "atom"
+      is_boolean(arg) -> "boolean"
+      is_binary(arg) -> "binary"
+      is_function(arg) -> "function"
+      is_list(arg) -> "list"
+      is_tuple(arg) -> "tuple"
+      true -> "unknown"
+    end
+  end
+
+  defp valid_collection?(config) do
+    Enum.all?(@collection_config_opts, fn opt ->
+      is_binary(Map.get(config, opt))
+    end)
   end
 
   defp render_collections_pages(collections, _opts) when collections == %{}, do: :ok
