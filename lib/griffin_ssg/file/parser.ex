@@ -1,8 +1,7 @@
 defmodule GriffinSSG.File.Parser do
   @moduledoc """
-  Module responsible for parsing files into GriffinSSG.File structs.
+  Module responsible for parsing files into maps.
   """
-  alias GriffinSSG.ContentFile
 
   def from_string(string_content) do
     try do
@@ -21,7 +20,7 @@ defmodule GriffinSSG.File.Parser do
             {parse_frontmatter(raw_frontmatter), content}
         end
 
-      {:ok, %ContentFile{front_matter: front_matter, content: content}}
+      {:ok, %{front_matter: front_matter, content: content}}
     rescue
       MatchError ->
         {:error, :parsing_front_matter_failed}
