@@ -32,10 +32,11 @@ defmodule Mix.Tasks.Grf.Server do
 
     port = http_port(opts)
 
-    input_directories = [
-      Application.get_env(:griffin_ssg, :input, "src"),
-      Application.get_env(:griffin_ssg, :layouts, "lib/layouts")
-    ]
+    input_directories =
+      [
+        Application.get_env(:griffin_ssg, :input, "src"),
+        Application.get_env(:griffin_ssg, :layouts, "lib/layouts")
+      ] ++ Application.get_env(:griffin_ssg, :additional_watch_directories, [])
 
     live_reload_watch_dirs = [
       ~r"#{Application.get_env(:griffin_ssg, :output, "_site")}/*"
