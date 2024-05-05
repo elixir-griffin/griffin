@@ -7,6 +7,11 @@ defmodule GriffinSSG.File.Watcher do
   use GenServer
 
   @swap_file_extnames [".swp", ".swx"]
+  @target_events [
+    [:modified, :closed],
+    # MacOS specific event
+    [:created, :modified]
+  ]
 
   def start_link({directories, callback}) do
     GenServer.start_link(__MODULE__, {directories, callback})
@@ -18,7 +23,7 @@ defmodule GriffinSSG.File.Watcher do
     {:ok, %{callback: callback}}
   end
 
-  def handle_info({:file_event, _watcher_pid, {file_path, [:modified, :closed]}}, state) do
+  def handle_info({:file_event, _watcher_pid, {file_path, event}}, state) when event in @target_events do
     unless Path.extname(file_path) in @swap_file_extnames do
       state.callback.()
     end
