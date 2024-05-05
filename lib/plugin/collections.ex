@@ -6,52 +6,83 @@ defmodule GriffinSSG.Plugin.Collections do
   """
   @behaviour GriffinSSG.Plugin.Behaviour
 
+  use GenServer
+
   alias GriffinSSG.Layouts
 
   @collection_config_opts [:permalink, :list_layout, :show_layout]
 
+  # GriffinSSG.Plugin callbacks
+
   @impl true
-  def init(_opts, plugin_opts) do
+  def start_link(griffin_config, plugin_opts) do
+    GenServer.start_link(__MODULE__, %{griffin_config: griffin_config, opts: plugin_opts},
+      name: __MODULE__
+    )
+  end
+
+  @impl true
+  def list_hooks() do
+    %{
+      before: [],
+      post_parse: [&__MODULE__.compile_collections/1],
+      after: [&__MODULE__.render_collection_pages/1]
+    }
+  end
+
+  # Griffin callbacks
+  def compile_collections({_, parsed_files, _, _}) do
+    GenServer.call(__MODULE__, {:compile_collections, parsed_files})
+  end
+
+  def render_collection_pages({_, _results, _, _}) do
+    GenServer.call(__MODULE__, :render_collection_pages)
+  end
+
+  # GenServer callbacks
+
+  @impl true
+  def init(%{griffin_config: griffin_config, opts: plugin_opts}) do
     case validate_config(plugin_opts) do
       {:ok, config} ->
-        config =
-          if Enum.empty?(config) do
-            config
-          else
-            %{
-              state: config,
-              hooks: %{
-                post_parse: [&__MODULE__.compile_collections/1],
-                after: [&__MODULE__.run/1]
-              }
-            }
-          end
+        {:ok, %{griffin_config: griffin_config, opts: config}}
 
-        {:ok, config}
-
-      error ->
+      {:error, _msg} = error ->
         error
     end
   end
 
-  def compile_collections({_, parsed_files, _, _}) do
-    opts = GriffinSSG.Config.get_all()
-
+  @impl true
+  def handle_call(
+        {:compile_collections, parsed_files},
+        _from,
+        %{griffin_config: griffin_config, opts: opts} = state
+      ) do
     collections =
-      opts.collections_config
+      opts
       |> Enum.map(fn {collection_name, config} ->
         # refactor: terrible efficiency, we're traversing the parsed list files
         # once per collection. Since most sites will have 1-2 collections max,
         # we're fine with this for now.
         {collection_name,
-         compile_collection(collection_name, parsed_files, Map.merge(opts, config))}
+         compile_collection(collection_name, parsed_files, Map.merge(griffin_config, config))}
       end)
       |> Enum.into(%{})
+
+    {:reply, :ok, Map.put(state, :collections, collections)}
   end
 
-  def run({_, _results, _, _}, config) do
-    render_collections_pages(config.collections, config)
+  def handle_call(
+        :render_collection_pages,
+        _from,
+        %{collections: collections, griffin_config: griffin_config} = state
+      ) do
+    result = do_render_collections_pages(collections, griffin_config)
+
+    {:reply, result, state}
   end
+
+  # internal functions
 
   defp validate_config(plugin_opts) do
     config = Keyword.get(plugin_opts, :collections, %{})
@@ -98,9 +129,9 @@ defmodule GriffinSSG.Plugin.Collections do
     end)
   end
 
-  defp render_collections_pages(collections, _opts) when collections == %{}, do: :ok
+  defp do_render_collections_pages(collections, _opts) when collections == %{}, do: :ok
 
-  defp render_collections_pages(collections, opts) do
+  defp do_render_collections_pages(collections, opts) do
     # Generate collections pages (example of tags below):
     # render `/tags/` page listing all tags
     # render `/tags/:tag` page listing all pages with that tag
