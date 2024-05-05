@@ -111,15 +111,12 @@ defmodule GriffinSSG.Plugin.Collections do
   def typeof(arg) do
     cond do
       is_map(arg) -> "map"
-      is_float(arg) -> "float"
       is_number(arg) -> "number"
       is_atom(arg) -> "atom"
-      is_boolean(arg) -> "boolean"
       is_binary(arg) -> "binary"
-      is_function(arg) -> "function"
       is_list(arg) -> "list"
       is_tuple(arg) -> "tuple"
-      true -> "unknown"
+      true -> to_string(arg)
     end
   end
 

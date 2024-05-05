@@ -646,25 +646,35 @@ defmodule Mix.Tasks.Grf.Build do
         Mix.raise("Plugin #{plugin} specified but could not be found")
       end
 
-      case plugin.init(opts, plugin_opts) do
-        {:error, reason} ->
-          Mix.raise("Plugin #{plugin} failed to initialize: #{reason}")
+      start_plugin!(plugin, opts, plugin_opts)
+      plugin_hooks = plugin.list_hooks()
+      invalid_hook = Enum.find(plugin_hooks, fn {hook, _} -> hook not in @available_hooks end)
 
-        {:ok, %{state: state, hooks: hooks}} ->
-          invalid_hook = Enum.find(hooks, fn {hook, _} -> hook not in @available_hooks end)
-
-          unless is_nil(invalid_hook) do
-            Mix.raise("plugin #{plugin} contains invalid hook: #{elem(invalid_hook, 1)}")
-          end
-
-          acc
-          |> Map.put(plugin, state)
-          |> Map.update(:hooks, @default_opts.hooks, fn existing_hooks ->
-            Map.merge(existing_hooks, hooks, fn _hook, existing, new ->
-              existing ++ new
-            end)
-          end)
+      unless is_nil(invalid_hook) do
+        Mix.raise("plugin #{plugin} contains invalid hook: #{elem(invalid_hook, 1)}")
       end
+
+      merge_hooks(acc, plugin_hooks)
+    end)
+  end
+
+  defp start_plugin!(plugin, opts, plugin_opts) do
+    case plugin.start_link(opts, plugin_opts) do
+      {:error, reason} ->
+        Mix.raise("Plugin #{plugin} failed to initialize: #{reason}")
+
+      {:ok, _pid} ->
+        :ok
+    end
+  end
+
+  # does a "deep" merge of 2 hooks maps, merging the results into a single list.
+  defp merge_hooks(left, right) do
+    left
+    |> Map.update(:hooks, @default_opts.hooks, fn existing_hooks ->
+      Map.merge(existing_hooks, right, fn _hook, existing, new ->
+        existing ++ new
+      end)
     end)
   end
 
