@@ -6,7 +6,7 @@ defmodule GriffinSSG.Plugin.CollectionsTest do
 
   describe "config validation" do
     test "starts successfully with an empty config" do
-      {:ok, pid} = Collections.start_link(%{}, collections: %{})
+      {:ok, pid} = Collections.start_link(%{}, %{collections: %{}})
       :ok = GenServer.stop(pid)
     end
 
@@ -19,7 +19,7 @@ defmodule GriffinSSG.Plugin.CollectionsTest do
         }
       }
 
-      {:ok, pid} = Collections.start_link(%{}, collections: config)
+      {:ok, pid} = Collections.start_link(%{}, %{collections: config})
       %{opts: state} = :sys.get_state(pid)
       assert state == config
     end
@@ -43,7 +43,7 @@ defmodule GriffinSSG.Plugin.CollectionsTest do
         }
       }
 
-      {:ok, pid} = Collections.start_link(%{}, collections: config)
+      {:ok, pid} = Collections.start_link(%{}, %{collections: config})
       %{opts: state} = :sys.get_state(pid)
       assert state == config
     end
@@ -53,7 +53,7 @@ defmodule GriffinSSG.Plugin.CollectionsTest do
 
       for name <- invalid_collection_names do
         assert {:error, "expected an atom as the collection name, found " <> _} =
-                 Collections.start_link(%{}, collections: %{name => %{}})
+                 Collections.start_link(%{}, %{collections: %{name => %{}}})
       end
     end
 
@@ -62,40 +62,49 @@ defmodule GriffinSSG.Plugin.CollectionsTest do
 
       for config <- invalid_collection_configs do
         assert {:error, "expected a map as the config for collection `tags`, found " <> _} =
-                 Collections.start_link(%{}, collections: %{tags: config})
+                 Collections.start_link(%{}, %{collections: %{tags: config}})
       end
     end
 
     test "returns an error if a collection's config does not contain all required options" do
       # missing permalink
       assert {:error, "config for collection `tags` is invalid, check all required opts"} =
-               Collections.start_link(%{},
-                 collections: %{
-                   tags: %{
-                     list_layout: "list_tags",
-                     show_layout: "show_tag"
+               Collections.start_link(
+                 %{},
+                 %{
+                   collections: %{
+                     tags: %{
+                       list_layout: "list_tags",
+                       show_layout: "show_tag"
+                     }
                    }
                  }
                )
 
       # missing list_layout
       assert {:error, "config for collection `tags` is invalid, check all required opts"} =
-               Collections.start_link(%{},
-                 collections: %{
-                   tags: %{
-                     permalink: "/tags/",
-                     show_layout: "show_tag"
+               Collections.start_link(
+                 %{},
+                 %{
+                   collections: %{
+                     tags: %{
+                       permalink: "/tags/",
+                       show_layout: "show_tag"
+                     }
                    }
                  }
                )
 
       # missing show_layout
       assert {:error, "config for collection `tags` is invalid, check all required opts"} =
-               Collections.start_link(%{},
-                 collections: %{
-                   tags: %{
-                     permalink: "/tags/",
-                     list_layout: "list_tags"
+               Collections.start_link(
+                 %{},
+                 %{
+                   collections: %{
+                     tags: %{
+                       permalink: "/tags/",
+                       list_layout: "list_tags"
+                     }
                    }
                  }
                )

@@ -16,7 +16,7 @@ defmodule GriffinSSG.Plugin.Collections do
 
   @impl true
   def start_link(griffin_config, plugin_opts) do
-    name = Keyword.get(plugin_opts, :name, nil)
+    name = Map.get(plugin_opts, :process_name, nil)
     process_opts = if name != nil, do: [name: name], else: []
 
     GenServer.start_link(
@@ -27,11 +27,17 @@ defmodule GriffinSSG.Plugin.Collections do
   end
 
   @impl true
-  def list_hooks() do
+  def list_hooks(pid \\ __MODULE__) do
     %{
       before: [],
-      post_parse: [&__MODULE__.compile_collections/1],
-      after: [&__MODULE__.render_collection_pages/1]
+      post_parse: [
+        fn args ->
+          compile_collections(pid, args)
+        end
+      ],
+      after: [fn args ->
+        render_collections_pages(pid, args)
+      end]
     }
   end
 
@@ -40,8 +46,8 @@ defmodule GriffinSSG.Plugin.Collections do
     GenServer.call(pid, {:compile_collections, parsed_files})
   end
 
-  def render_collection_pages(pid \\ __MODULE__, {_, _results, _, _}) do
-    GenServer.call(pid, :render_collection_pages)
+  def render_collections_pages(pid \\ __MODULE__, {_, _results, _, _}) do
+    GenServer.call(pid, :render_collections_pages)
   end
 
   # GenServer callbacks
@@ -78,10 +84,15 @@ defmodule GriffinSSG.Plugin.Collections do
   end
 
   def handle_call(
-        :render_collection_pages,
+        :render_collections_pages,
         _from,
-        %{collections: collections, griffin_config: griffin_config} = state
+        %{collections: collections, griffin_config: griffin_config, opts: opts} = state
       ) do
+    # TODO: call render collection for each collection
+    for {collection_name, collection_values} <- collections do
+      {_name, collection_config} = Enum.find(opts, fn {name, _config} -> name == collection_name end)
+      render_collection_pages(collection_name, collection_config, collection_values, griffin_config)
+    end
     result = do_render_collections_pages(collections, griffin_config)
 
     {:reply, result, state}
@@ -90,7 +101,7 @@ defmodule GriffinSSG.Plugin.Collections do
   # internal functions
 
   defp validate_config(plugin_opts) do
-    config = Keyword.get(plugin_opts, :collections, %{})
+    config = Map.get(plugin_opts, :collections, %{})
 
     Enum.reduce_while(config, {:ok, config}, fn {collection, config}, acc ->
       cond do
@@ -131,49 +142,101 @@ defmodule GriffinSSG.Plugin.Collections do
     end)
   end
 
-  defp do_render_collections_pages(collections, _opts) when collections == %{}, do: :ok
+  defp render_collection_pages(name, config, collection_values, griffin_config) do
+    file_path =
+      if config.permalink do
+        Path.join(griffin_config.output, "/#{config.permalink}/index.html")
+      else
+        Path.join(griffin_config.output, "/index.html")
+      end
 
-  defp do_render_collections_pages(collections, opts) do
-    # Generate collections pages (example of tags below):
-    # render `/tags/` page listing all tags
-    # render `/tags/:tag` page listing all pages with that tag
-    for {collection_name, collection_values} <- collections do
-      render_collection_file(
-        opts.output_path <> "/#{collection_name}/index.html",
+    render_collection_file(
+        file_path,
         %{
           page: nil,
           data: %{
             layout: EEx.compile_string(Layouts.fallback_list_collection_layout()),
-            collection_name: collection_name,
+            collection_name: name,
             collection_values: collection_values
           },
           content: "",
           input: "tags_list.eex"
         },
-        opts
+        griffin_config
       )
 
-      for {collection_value, collection_value_pages} <- collection_values do
-        collection_value = collection_value |> Atom.to_string() |> Slug.slugify()
+    base_path = if config.permalink do
+      Path.join(griffin_config.output, "/#{config.permalink}")
+    else
+      Path.join(griffin_config.output, "/#{name}")
+    end
 
-        render_collection_file(
-          opts.output <> "/#{collection_name}/#{collection_value}/index.html",
-          %{
-            page: nil,
-            data: %{
-              layout: EEx.compile_string(Layouts.fallback_show_collection_layout()),
-              collection_name: collection_name,
-              collection_value: collection_value,
-              collection_value_pages: collection_value_pages
-            },
-            content: "",
-            input: "tags.eex"
+    for {collection_value, collection_value_pages} <- collection_values do
+      collection_value = collection_value |> Atom.to_string() |> Slug.slugify()
+
+
+      render_collection_file(
+        Path.join(base_path, "/#{collection_value}/index.html"),
+        %{
+          page: nil,
+          data: %{
+            layout: EEx.compile_string(Layouts.fallback_show_collection_layout()),
+            collection_name: name,
+            collection_value: collection_value,
+            collection_value_pages: collection_value_pages
           },
-          opts
-        )
-      end
+          content: "",
+          input: "tags.eex"
+        },
+        griffin_config
+      )
     end
   end
+
+  defp do_render_collections_pages(_collections, _opts), do: :ok
+  # defp do_render_collections_pages(collections, _opts) when collections == %{}, do: :ok
+
+  # defp do_render_collections_pages(collections, opts) do
+  #   # Generate collections pages (example of tags below):
+  #   # render `/tags/` page listing all tags
+  #   # render `/tags/:tag` page listing all pages with that tag
+  #   for {collection_name, collection_values} <- collections do
+  #     render_collection_file(
+  #       Path.join(opts.output, "/index.html"),
+  #       %{
+  #         page: nil,
+  #         data: %{
+  #           layout: EEx.compile_string(Layouts.fallback_list_collection_layout()),
+  #           collection_name: collection_name,
+  #           collection_values: collection_values
+  #         },
+  #         content: "",
+  #         input: "tags_list.eex"
+  #       },
+  #       opts
+  #     )
+
+  #     for {collection_value, collection_value_pages} <- collection_values do
+  #       collection_value = collection_value |> Atom.to_string() |> Slug.slugify()
+
+  #       render_collection_file(
+  #         opts.output <> "/#{collection_name}/#{collection_value}/index.html",
+  #         %{
+  #           page: nil,
+  #           data: %{
+  #             layout: EEx.compile_string(Layouts.fallback_show_collection_layout()),
+  #             collection_name: collection_name,
+  #             collection_value: collection_value,
+  #             collection_value_pages: collection_value_pages
+  #           },
+  #           content: "",
+  #           input: "tags.eex"
+  #         },
+  #         opts
+  #       )
+  #     end
+  #   end
+  # end
 
   # refactor: this function shares much of the logic of render_file.
   @doc false
@@ -190,7 +253,8 @@ defmodule GriffinSSG.Plugin.Collections do
     layout = Map.fetch!(data, :layout)
 
     layout_assigns =
-      opts.global_assigns
+      opts
+      |> Map.get(:global_assigns, %{})
       |> Map.merge(%{page: page, collections: opts.collections})
       |> Map.merge(data)
       |> Map.put_new(:title, "Griffin")
