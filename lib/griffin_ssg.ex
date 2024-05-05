@@ -32,6 +32,9 @@ defmodule GriffinSSG do
   @typedoc "configuration of hooks used during the build process"
   @type hooks :: %{before: list(hook()), post_parse: list(hook()), after: list(hook())}
 
+  @typedoc "griffin application configuration"
+  @type config :: map()
+
   @doc """
   Parses the string contents of a file into two components: front matter and file content.
 

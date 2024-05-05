@@ -2,7 +2,6 @@ defmodule GriffinSSG.File.ParserTest do
   use ExUnit.Case, async: true
 
   alias GriffinSSG.File.Parser
-  alias GriffinSSG.ContentFile
 
   describe "from_string/1" do
     test "works with a simple text file" do
@@ -12,7 +11,7 @@ defmodule GriffinSSG.File.ParserTest do
       It has multiple lines
       """
 
-      assert {:ok, %ContentFile{front_matter: %{}, content: string}} ==
+      assert {:ok, %{front_matter: %{}, content: string}} ==
                Parser.from_string(string)
     end
 
@@ -29,7 +28,7 @@ defmodule GriffinSSG.File.ParserTest do
       ---
       """
 
-      assert {:ok, %ContentFile{front_matter: front_matter, content: ""}} =
+      assert {:ok, %{front_matter: front_matter, content: ""}} =
                Parser.from_string(string)
 
       assert title == front_matter.title
@@ -65,7 +64,7 @@ defmodule GriffinSSG.File.ParserTest do
       [this is a link](http://example.com)
       """
 
-      assert {:ok, %ContentFile{front_matter: front_matter, content: content}} =
+      assert {:ok, %{front_matter: front_matter, content: content}} =
                Parser.from_string(string)
 
       assert title == front_matter.title
@@ -100,7 +99,7 @@ defmodule GriffinSSG.File.ParserTest do
       | col 3 is | right-aligned |    $1 |
       """
 
-      assert {:ok, %ContentFile{front_matter: %{}, content: content}} =
+      assert {:ok, %{front_matter: %{}, content: content}} =
                Parser.from_string(string)
 
       lines = String.split(string, "\n", trim: true)
@@ -136,7 +135,7 @@ defmodule GriffinSSG.File.ParserTest do
       | col 3 is | right-aligned |    $1 |
       """
 
-      assert {:ok, %ContentFile{front_matter: front_matter, content: content}} =
+      assert {:ok, %{front_matter: front_matter, content: content}} =
                Parser.from_string(string)
 
       assert title == front_matter.title
