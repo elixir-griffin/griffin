@@ -16,8 +16,13 @@ defmodule GriffinSSG.Plugin.Collections do
 
   @impl true
   def start_link(griffin_config, plugin_opts) do
-    GenServer.start_link(__MODULE__, %{griffin_config: griffin_config, opts: plugin_opts},
-      name: __MODULE__
+    name = Keyword.get(plugin_opts, :name, nil)
+    process_opts = if name != nil, do: [name: name], else: []
+
+    GenServer.start_link(
+      __MODULE__,
+      %{griffin_config: griffin_config, opts: plugin_opts},
+      process_opts
     )
   end
 
@@ -31,12 +36,12 @@ defmodule GriffinSSG.Plugin.Collections do
   end
 
   # Griffin callbacks
-  def compile_collections({_, parsed_files, _, _}) do
-    GenServer.call(__MODULE__, {:compile_collections, parsed_files})
+  def compile_collections(pid \\ __MODULE__, {_, parsed_files, _, _}) do
+    GenServer.call(pid, {:compile_collections, parsed_files})
   end
 
-  def render_collection_pages({_, _results, _, _}) do
-    GenServer.call(__MODULE__, :render_collection_pages)
+  def render_collection_pages(pid \\ __MODULE__, {_, _results, _, _}) do
+    GenServer.call(pid, :render_collection_pages)
   end
 
   # GenServer callbacks
