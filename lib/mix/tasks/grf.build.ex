@@ -646,8 +646,8 @@ defmodule Mix.Tasks.Grf.Build do
         Mix.raise("Plugin #{plugin} specified but could not be found")
       end
 
-      start_plugin!(plugin, opts, plugin_opts)
-      plugin_hooks = plugin.list_hooks()
+      {:ok, pid} = start_plugin!(plugin, opts, plugin_opts)
+      plugin_hooks = plugin.list_hooks(pid)
       invalid_hook = Enum.find(plugin_hooks, fn {hook, _} -> hook not in @available_hooks end)
 
       unless is_nil(invalid_hook) do
@@ -663,8 +663,8 @@ defmodule Mix.Tasks.Grf.Build do
       {:error, reason} ->
         Mix.raise("Plugin #{plugin} failed to initialize: #{reason}")
 
-      {:ok, _pid} ->
-        :ok
+      {:ok, pid} ->
+        {:ok, pid}
     end
   end
 

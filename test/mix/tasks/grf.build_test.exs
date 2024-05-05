@@ -968,4 +968,128 @@ defmodule Mix.Tasks.Grf.BuildTest do
       assert file =~ "<p>Today's lucky number is 17.</p>"
     end)
   end
+
+  describe "Plugin.Collections" do
+    @tag :tmp_dir
+    test "does not run Collections plugin when not listed in global config", %{tmp_dir: tmp_dir} do
+      File.mkdir_p!(tmp_dir <> "/src")
+
+      File.write!(tmp_dir <> "/src/a.md", "This is file A.")
+
+      # use an invalid configuration for collections which would crash the plugin
+      File.write!(tmp_dir <> "/config.exs", """
+      %{
+        # any other config key could be set here
+        input: "#{tmp_dir <> "/src"}",
+        output: "#{tmp_dir <> "/_site"}",
+        layouts: "#{tmp_dir <> "/lib/layouts"}",
+        plugins: [],
+        collections: %{
+          tags: %{}
+        }
+      }
+      """)
+
+      Mix.Tasks.Grf.Build.run(["--config", tmp_dir <> "/config.exs"])
+
+      # implicitly asserts that plugin did not run because it did not raise
+      assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
+      assert_received {:mix_shell, :info, ["Compiled 0 layouts " <> _]}
+    end
+
+    @tag :tmp_dir
+    test "runs Collection plugin if given a valid config", %{tmp_dir: tmp_dir} do
+      File.mkdir_p!(tmp_dir <> "/src")
+      File.mkdir_p!(tmp_dir <> "/lib/layouts")
+
+      File.write!(tmp_dir <> "/lib/layouts/taglist.eex", """
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <title>All Posts</title>
+        </head>
+        <body>
+          <h1>All Posts</h1>
+          <ul>
+          <%= for {tag, _pages} <- @collection_values do %>
+            <li><a href="<%= @collection_permalink %>/<%= tag %>/"><%= tag %></a></li>
+          <% end %>
+          </ul>
+        </body>
+      </html>
+      """)
+
+      File.write!(tmp_dir <> "/lib/layouts/tagshow.eex", """
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <title>All Posts</title>
+        </head>
+        <body>
+          <h1>All Posts</h1>
+          <ul>
+          <%= for {tag, _pages} <- @collection_values do %>
+            <li><a href="<%= @collection_permalink %>/<%= tag %>/"><%= tag %></a></li>
+          <% end %>
+          </ul>
+        </body>
+      </html>
+      """)
+
+      File.write!(tmp_dir <> "/src/a.md", """
+      ---
+      title: A
+      tags:
+        - tech
+        - drama
+      ---
+      This is file A.
+      """)
+
+      File.write!(tmp_dir <> "/src/b.md", """
+      ---
+      title: B
+      tags:
+        - tech
+        - startups
+      ---
+      This is file B.
+      """)
+
+      File.write!(tmp_dir <> "/src/c.md", """
+      ---
+      title: C
+      tags:
+        - personal
+      ---
+      This is file C.
+      """)
+
+      # use a valid configuration for collections
+      File.write!(tmp_dir <> "/config.exs", """
+      %{
+        input: "#{tmp_dir <> "/src"}",
+        output: "#{tmp_dir <> "/_site"}",
+        layouts: "#{tmp_dir <> "/lib/layouts"}",
+        plugins: [{GriffinSSG.Plugin.Collections, %{
+          collections: %{
+            tags: %{
+              permalink: "/posts",
+              list_layout: "tagshow",
+              show_layout: "tagshow"
+            }
+          }
+        }}]
+      }
+      """)
+
+      Mix.Tasks.Grf.Build.run(["--config", tmp_dir <> "/config.exs"])
+
+      assert_received {:mix_shell, :info, ["Wrote 3 files in " <> _]}
+      assert_received {:mix_shell, :info, ["Compiled 2 layouts " <> _]}
+
+      refute_file(tmp_dir <> "/_site/tags/index.html")
+      assert_file(tmp_dir <> "/_site/posts/index.html")
+    end
+  end
 end
