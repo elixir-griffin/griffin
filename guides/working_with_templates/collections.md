@@ -80,7 +80,7 @@ import Config
 
 config :griffin_ssg,
   collections: %{
-    "albums": %{
+    "genres": %{
       permalink: "/movie/genres",
       list_layout: "list_genres",
       show_layout: "show_genre"
