@@ -18,9 +18,11 @@ defmodule GriffinSSG.Filesystem.Watcher do
     {:ok, %{callback: callback}}
   end
 
-  def handle_info({:file_event, _watcher_pid, {file_path, [:modified, :closed]}}, state) do
-    unless Path.extname(file_path) in @swap_file_extnames do
-      state.callback.()
+  def handle_info({:file_event, _watcher_pid, {file_path, events}}, state) do
+    if Enum.any?([:modified, :closed], & &1 in events) do
+      unless Path.extname(file_path) in @swap_file_extnames do
+        state.callback.()
+      end
     end
 
     {:noreply, state}
