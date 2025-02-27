@@ -82,7 +82,7 @@ The output may look like this:
 ```console
 ~/blog $ mix grf.build
 Writing _site/README/index.html from ./README.md (earmark)
-Writing _site/index.html from ./index.html (earmark)
+Writing _site/index.html from ./index.md (earmark)
 Wrote 2 files in 0.06 seconds (v0.3.0)
 ```
 
