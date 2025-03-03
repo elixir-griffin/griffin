@@ -55,12 +55,16 @@ Wrote 0 files in 0.03 seconds (v0.3.0)
 If you see `(v0.3.0)` that means you're running the latest version of Griffin. Note that Griffin didn't process any files -- this was expected, since we've not added templates yet.
 
 ### 4. Create some templates
-A *template* is a content file written in a format such as Markdown, HTML or Liquid, which Griffin transforms into one or more pages when building our website.
+A *template* is a content file written in a format such as Markdown, HTML or Liquid, which Griffin transforms into one or more pages when building our website. By default Griffin uses the files in `src` as input so first
+
+```console
+cd src
+```
 
 Let's create a couple of templates with the following commands:
 
 ```console
-echo '<!doctype html><title>My Cool Blog</title><p>Hello!</p>' > index.html
+echo '<!doctype html><title>My Cool Blog</title><p>Hello!</p>' > index.md
 ```
 
 ```console
@@ -78,7 +82,7 @@ The output may look like this:
 ```console
 ~/blog $ mix grf.build
 Writing _site/README/index.html from ./README.md (earmark)
-Writing _site/index.html from ./index.html (earmark)
+Writing _site/index.html from ./index.md (earmark)
 Wrote 2 files in 0.06 seconds (v0.3.0)
 ```
 
