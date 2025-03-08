@@ -267,6 +267,7 @@ defmodule Mix.Tasks.Grf.Build do
     :debug,
     :dry_run,
     :hooks,
+    :plugins,
     :ignore,
     :input,
     :layouts,
@@ -274,6 +275,8 @@ defmodule Mix.Tasks.Grf.Build do
     :passthrough_copies,
     :quiet
   ]
+
+  @available_hooks [:before, :after, :post_parse]
 
   @default_opts %{
     input: "src",
@@ -283,16 +286,14 @@ defmodule Mix.Tasks.Grf.Build do
     data: "data",
     passthrough_copies: [],
     ignore: [],
-    hooks: %{
-      before: [],
-      after: []
-    },
+    hooks: Enum.map(@available_hooks, fn hook -> {hook, []} end) |> Map.new(),
     quiet: false,
     dry_run: false,
     # in the future we might support `:watch` and `:serve`
     run_mode: :build,
     # in the future we might support `:json`
     output_mode: :file_system,
+    plugins: [],
     debug: false
   }
 
@@ -319,6 +320,7 @@ defmodule Mix.Tasks.Grf.Build do
 
   @input_extnames [".md", ".markdown", ".eex"]
 
+  # credo:disable-for-lines:5
   @impl Mix.Task
   def run(args, _test_opts \\ []) do
     {time_in_microseconds, files_written} =
@@ -340,15 +342,11 @@ defmodule Mix.Tasks.Grf.Build do
           input: opts.input,
           output: opts.output,
           layouts: opts.layouts,
-          partials: opts.layouts <> "/partials",
+          partials: Path.join(opts.layouts, "/partials"),
           data: opts.data
         }
 
         validate_directories!(directories, opts)
-
-        for hook <- opts.hooks.before do
-          hook.({directories, opts.run_mode, opts.output_mode})
-        end
 
         # import global assigns from data directory
         global_assigns =
@@ -356,7 +354,13 @@ defmodule Mix.Tasks.Grf.Build do
           |> fetch_assigns_from_data_dir()
           |> Map.merge(%{griffin: @griffin})
 
-        opts = Map.put(opts, :global_assigns, global_assigns)
+        opts =
+          opts
+          |> initialize_plugins!()
+          |> Map.put(:directories, directories)
+          |> Map.put(:global_assigns, global_assigns)
+
+        call_hooks(opts, :before, {directories, opts.run_mode, opts.output_mode})
 
         copy_passthrough_files!(opts)
 
@@ -389,18 +393,11 @@ defmodule Mix.Tasks.Grf.Build do
             Task.await(task, :infinity)
           end
 
-        collections =
-          opts.collections
-          |> Enum.map(fn {collection_name, config} ->
-            # refactor: terrible efficiency, we're traversing the parsed list files
-            # once per collection. Since most sites will have 1-2 collections max,
-            # we're fine with this for now.
-            {collection_name,
-             compile_collection(collection_name, parsed_files, Map.merge(opts, config))}
-          end)
-          |> Enum.into(%{})
-
-        opts = Map.put(opts, :collections, collections)
+        call_hooks(
+          opts,
+          :post_parse,
+          {directories, parsed_files, opts.run_mode, opts.output_mode}
+        )
 
         tasks =
           for metadata <- parsed_files do
@@ -419,11 +416,7 @@ defmodule Mix.Tasks.Grf.Build do
             Task.await(task, :infinity)
           end
 
-        render_collections_pages(collections, opts)
-
-        for hook <- opts.hooks.after do
-          hook.({directories, results, opts.run_mode, opts.output_mode})
-        end
+        call_hooks(opts, :after, {directories, results, opts.run_mode, opts.output_mode})
 
         length(results)
       end)
@@ -499,21 +492,17 @@ defmodule Mix.Tasks.Grf.Build do
         opts
       ) do
     layout_name = Map.get(data, :layout, "__fallback__")
-
-    layout_assigns =
-      filters_assigns()
-      |> Map.merge(shortcodes_assigns())
-      |> Map.merge(partials_assigns())
-      |> Map.merge(opts.global_assigns)
-      |> Map.merge(%{page: page, collections: opts.collections})
-      |> Map.merge(data)
-      |> Map.put_new(:title, "Griffin")
-
     layout = fetch_layout(layout_name)
 
     if layout == nil do
       Mix.raise("File #{file} specified layout `#{layout_name}` but no such layout was found")
     end
+
+    layout_assigns =
+      opts.global_assigns
+      |> Map.merge(%{page: page, collections: opts.collections})
+      |> Map.merge(data)
+      |> Map.put_new(:title, "Griffin")
 
     output =
       GriffinSSG.render(
@@ -547,104 +536,21 @@ defmodule Mix.Tasks.Grf.Build do
     output
   end
 
-  # refactor: this function shares much of the logic of render_file.
-  @doc false
-  def render_collection_file(
-        file,
-        %{
-          page: page,
-          data: data,
-          content: content,
-          input: input_path
-        },
-        opts
-      ) do
-    layout = Map.fetch!(data, :layout)
+  defp call_hooks(opts, hook, arg) do
+    opts.hooks
+    |> Map.get(hook, [])
+    |> Enum.reduce(opts, fn hook, acc ->
+      case hook do
+        {name, fun} ->
+          # plugin hook, check if there's state to pass
+          state = Map.get(opts, name)
+          {:ok, new_state} = fun.(arg, state)
+          Map.put(acc, name, new_state)
 
-    layout_assigns =
-      filters_assigns()
-      |> Map.merge(shortcodes_assigns())
-      |> Map.merge(partials_assigns())
-      |> Map.merge(opts.global_assigns)
-      |> Map.merge(%{page: page, collections: opts.collections})
-      |> Map.merge(data)
-      |> Map.put_new(:title, "Griffin")
-
-    output =
-      GriffinSSG.render(
-        layout,
-        %{
-          content_type: Path.extname(input_path),
-          content: content,
-          assigns: layout_assigns,
-          rerender_partials: false
-        }
-      )
-
-    unless opts.quiet do
-      Mix.shell().info("writing: #{file}")
-    end
-
-    unless opts.dry_run do
-      file
-      |> Path.dirname()
-      |> Path.expand()
-      |> File.mkdir_p()
-
-      case File.write(file, output) do
-        :ok ->
-          :ok
-
-        {:error, reason} ->
-          Mix.raise("Unable to write to #{file}: `#{reason}`")
+        fun ->
+          fun.(arg)
       end
-    end
-
-    output
-  end
-
-  defp render_collections_pages(collections, _opts) when collections == %{}, do: :ok
-
-  defp render_collections_pages(collections, opts) do
-    # Generate collections pages (example of tags below):
-    # render /tags/ page listing all tags
-    # render /tags/:tag page listing all pages with that tag
-    for {collection_name, collection_values} <- collections do
-      render_collection_file(
-        opts.output <> "/#{collection_name}/index.html",
-        %{
-          page: nil,
-          data: %{
-            layout: EEx.compile_string(Layouts.fallback_list_collection_layout()),
-            collection_name: collection_name,
-            collection_values: collection_values
-          },
-          content: "",
-          input: "tags_list.eex"
-        },
-        opts
-      )
-
-      for {collection_value, collection_value_pages} <- collection_values do
-        collection_value = collection_value |> Atom.to_string() |> Slug.slugify()
-
-        render_collection_file(
-          opts.output <> "/#{collection_name}/#{collection_value}/index.html",
-          %{
-            page: nil,
-            data: %{
-              layout: EEx.compile_string(Layouts.fallback_show_collection_layout()),
-              collection_name: collection_name,
-              collection_value: collection_value,
-              collection_value_pages: collection_value_pages
-            },
-            content: "",
-            input: "tags.eex"
-          },
-          opts
-        )
-      end
-    end
+    end)
   end
 
   defp fetch_assigns_from_data_dir(opts) do
@@ -720,45 +626,6 @@ defmodule Mix.Tasks.Grf.Build do
     end
   end
 
-  defp compile_collection(collection_name, parsed_files, opts) do
-    collections =
-      parsed_files
-      |> Enum.filter(fn metadata ->
-        metadata.data[collection_name] != nil
-      end)
-      |> Enum.reduce(%{}, fn metadata, acc ->
-        collection_values = metadata.data[collection_name]
-
-        values =
-          if is_list(collection_values) do
-            collection_values
-          else
-            # single value
-            [collection_values]
-          end
-
-        Enum.reduce(values, acc, fn value, current_values ->
-          Map.update(current_values, String.to_atom(value), [metadata], fn list_files ->
-            [metadata | list_files]
-          end)
-        end)
-      end)
-
-    if opts.debug do
-      string_col_name = String.capitalize(Atom.to_string(collection_name))
-      collections_pretty_print = Enum.join(Map.keys(collections), ", ")
-      Mix.shell().info("#{string_col_name}: #{collections_pretty_print}")
-
-      for {value, files} <- collections do
-        files_pretty_print = Enum.map_join(files, ",", fn metadata -> metadata.input end)
-
-        Mix.shell().info("#{string_col_name} #{value}: #{files_pretty_print}")
-      end
-    end
-
-    collections
-  end
-
   defp compile_layouts!(opts) do
     case Layouts.compile_layouts(opts.layouts) do
       {:ok, num_layouts, num_partials} ->
@@ -771,6 +638,44 @@ defmodule Mix.Tasks.Grf.Build do
       {:error, :layout_cyclic_dependency, errored_layouts} ->
         Mix.raise("Dependency issue with layouts `[#{errored_layouts}]`")
     end
+  end
+
+  defp initialize_plugins!(opts) do
+    Enum.reduce(opts.plugins, opts, fn {plugin, plugin_opts}, acc ->
+      unless Code.ensure_loaded?(plugin) do
+        Mix.raise("Plugin #{plugin} specified but could not be found")
+      end
+
+      {:ok, pid} = start_plugin!(plugin, opts, plugin_opts)
+      plugin_hooks = plugin.list_hooks(pid)
+      invalid_hook = Enum.find(plugin_hooks, fn {hook, _} -> hook not in @available_hooks end)
+
+      unless is_nil(invalid_hook) do
+        Mix.raise("plugin #{plugin} contains invalid hook: #{elem(invalid_hook, 1)}")
+      end
+
+      merge_hooks(acc, plugin_hooks)
+    end)
+  end
+
+  defp start_plugin!(plugin, opts, plugin_opts) do
+    case plugin.start_link(opts, plugin_opts) do
+      {:error, reason} ->
+        Mix.raise("Plugin #{plugin} failed to initialize: #{reason}")
+
+      {:ok, pid} ->
+        {:ok, pid}
+    end
+  end
+
+  # does a "deep" merge of 2 hooks maps, merging the results into a single list.
+  defp merge_hooks(left, right) do
+    left
+    |> Map.update(:hooks, @default_opts.hooks, fn existing_hooks ->
+      Map.merge(existing_hooks, right, fn _hook, existing, new ->
+        existing ++ new
+      end)
+    end)
   end
 
   defp fetch_layout(name) do
@@ -826,44 +731,6 @@ defmodule Mix.Tasks.Grf.Build do
 
   defp get_app_env(key, default \\ nil) do
     Application.get_env(:griffin_ssg, key, default)
-  end
-
-  defp partials_assigns() do
-    :griffin_build_layouts
-    |> :ets.lookup(:__partials__)
-    |> then(fn [{:__partials__, partials}] ->
-      %{partials: partials}
-    end)
-  end
-
-  defp filters_assigns() do
-    Map.merge(default_filters(), get_app_env(:filters, %{}))
-  end
-
-  defp default_filters() do
-    %{
-      slugify: &Slug.slugify/1,
-      uppercase: &String.upcase/1,
-      lowercase: &String.downcase/1
-    }
-  end
-
-  defp shortcodes_assigns() do
-    Map.merge(default_shortcodes(), get_app_env(:shortcodes, %{}))
-  end
-
-  defp default_shortcodes do
-    %{
-      youtube: fn slug ->
-        """
-        <iframe width="560" height="315" src="https://www.youtube.com/embed/#{slug}"
-                title="YouTube video player" frameborder="0" allow="accelerometer;
-                autoplay; clipboard-write; encrypted-media; gyroscope;
-                picture-in-picture; web-share" allowfullscreen>
-        </iframe>
-        """
-      end
-    }
   end
 
   defp pluralize(string, 1), do: string
