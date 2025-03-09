@@ -1,23 +1,26 @@
 defmodule Mix.Tasks.Grf.BuildTest do
   use ExUnit.Case, async: false
-  import GriffinFileHelper
+
   import Assertions, only: [assert_lists_equal: 2]
+  import GriffinFileHelper
 
   # Missing tests:
   # - config hierarchy
   # - nested shortcodes
   # - not rendering files that have draft in front matter
 
+  alias Mix.Tasks.Grf.Build
+
   @tag :tmp_dir
   test "doesn't work on any files when given an empty input directory", %{tmp_dir: tmp_dir} do
-    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir <> "/_site"])
+    Build.run(["--input", tmp_dir, "--output", tmp_dir <> "/_site"])
     assert_received {:mix_shell, :info, ["Wrote 0 files in " <> _]}
   end
 
   @tag :tmp_dir
   test "raises when input directory isn't a readable directory", %{tmp_dir: tmp_dir} do
     assert_raise Mix.Error, "Invalid input directory: `#{tmp_dir <> "404"}`", fn ->
-      Mix.Tasks.Grf.Build.run(["--input", tmp_dir <> "404"])
+      Build.run(["--input", tmp_dir <> "404"])
     end
   end
 
@@ -27,7 +30,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     File.write!(tmp_dir <> "/output", "abc123")
 
     assert_raise Mix.Error, "Invalid output directory: `#{corrupt_directory}`", fn ->
-      Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", corrupt_directory])
+      Build.run(["--input", tmp_dir, "--output", corrupt_directory])
     end
   end
 
@@ -42,7 +45,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     This is supposed to go to <output>/a/b/c/d/index.html
     """)
 
-    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir])
+    Build.run(["--input", tmp_dir, "--output", tmp_dir])
     assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
     assert_file(tmp_dir <> "/a/b/c/d/index.html")
   end
@@ -59,7 +62,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     the output is supposed to go to <output>/a/b/c/index.html
     """)
 
-    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir])
+    Build.run(["--input", tmp_dir, "--output", tmp_dir])
     assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
     assert_file(tmp_dir <> "/a/b/c/index.html")
   end
@@ -103,7 +106,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     <div id="three"><%= @baz %></div>
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir <> "/src",
       "--output",
@@ -158,7 +161,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     <html><title><%= @title %></title><body><div id="b"><%= @content%></div></body></html>
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir <> "/src",
       "--output",
@@ -235,7 +238,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     <%= @content%>
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir <> "/src",
       "--output",
@@ -267,7 +270,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     this is file A
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir,
       "--output",
@@ -280,7 +283,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
       assert file =~ "<!DOCTYPE html>"
 
       assert file =~
-               "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+               ~s(<meta name="viewport" content="width=device-width, initial-scale=1.0">)
 
       assert file =~ "this is file A"
     end)
@@ -307,7 +310,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     """)
 
     assert_raise Mix.Error, "Dependency issue with layouts `[a, b]`", fn ->
-      Mix.Tasks.Grf.Build.run([
+      Build.run([
         "--input",
         tmp_dir,
         "--output",
@@ -329,7 +332,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     from the front matter.
     """)
 
-    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir])
+    Build.run(["--input", tmp_dir, "--output", tmp_dir])
     assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
 
     assert_file(tmp_dir <> "/d/index.html", fn file ->
@@ -348,7 +351,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     2 plus 2 is <%= @sum %> minus 1 is <%= @result %>
     """)
 
-    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir])
+    Build.run(["--input", tmp_dir, "--output", tmp_dir])
     assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
 
     assert_file(tmp_dir <> "/d/index.html", fn file ->
@@ -376,7 +379,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     this is file B
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir,
       "--output",
@@ -396,7 +399,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
 
   @tag :tmp_dir
   test "passthrough copies files to the correct path", %{tmp_dir: tmp_dir} do
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir,
       "--output",
@@ -420,7 +423,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     File.mkdir_p!(tmp_dir)
     :ok = File.write(tmp_dir <> "/config.ex", config_file)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir,
       "--config",
@@ -466,7 +469,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     # But this will
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir,
       "--output",
@@ -508,7 +511,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     </body></html>
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir <> "/src",
       "--output",
@@ -551,7 +554,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     </body></html>
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir <> "/src",
       "--output",
@@ -596,7 +599,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     <html><body><div id="config-test"><%= @content %></div></body></html>
     """)
 
-    Mix.Tasks.Grf.Build.run(["--config", tmp_dir <> "/config.ex"])
+    Build.run(["--config", tmp_dir <> "/config.ex"])
 
     assert_received {:mix_shell, :info, ["Wrote 1 files in " <> _]}
 
@@ -618,7 +621,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     # two
     """)
 
-    Mix.Tasks.Grf.Build.run(["--input", tmp_dir, "--output", tmp_dir, "--quiet"])
+    Build.run(["--input", tmp_dir, "--output", tmp_dir, "--quiet"])
 
     assert_received {:mix_shell, :info, ["Wrote 2 files in " <> _]}
     refute_received {:mix_shell, :info, ["Compiled 0 layouts (0 partials)"]}
@@ -641,7 +644,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     # Neither will this
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir,
       "--output",
@@ -708,7 +711,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     # I also have tags but in different yaml
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir <> "/src",
       "--output",
@@ -767,7 +770,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     </body></html>
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir <> "/src",
       "--output",
@@ -844,7 +847,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     <html><title><%= @title %></title><body><%= @content %></body></html>
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir <> "/src",
       "--output",
@@ -904,7 +907,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     </body></html>
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir <> "/src",
       "--output",
@@ -949,7 +952,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
     </body></html>
     """)
 
-    Mix.Tasks.Grf.Build.run([
+    Build.run([
       "--input",
       tmp_dir <> "/src",
       "--output",

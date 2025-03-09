@@ -1,6 +1,4 @@
 defmodule Mix.Tasks.Grf.New.Page do
-  use Mix.Task
-
   @shortdoc "Generates a new Markdown content page"
 
   @moduledoc """
@@ -18,6 +16,8 @@ defmodule Mix.Tasks.Grf.New.Page do
     * `--draft` - marks the file as a draft in the frontmatter.
   """
 
+  use Mix.Task
+
   @switches [
     title: :string,
     draft: :boolean
@@ -27,7 +27,7 @@ defmodule Mix.Tasks.Grf.New.Page do
   def run(args) do
     {opts, path} = OptionParser.parse!(args, strict: @switches)
 
-    opts = Enum.into(opts, %{})
+    opts = Map.new(opts)
 
     path
     |> Path.dirname()
@@ -35,7 +35,7 @@ defmodule Mix.Tasks.Grf.New.Page do
 
     title = opts[:title] || path
     draft = opts[:draft] || false
-    date = DateTime.utc_now() |> DateTime.to_iso8601()
+    date = DateTime.to_iso8601(DateTime.utc_now())
 
     File.write!(path, """
     ---

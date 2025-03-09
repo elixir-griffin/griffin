@@ -60,7 +60,8 @@ defmodule Griffin.MixProject do
       {:assertions, "~> 0.19"},
 
       # dev and test dependencies
-      {:credo, "~> 1.7.2-rc.2", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:styler, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 

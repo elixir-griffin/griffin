@@ -1,10 +1,13 @@
 defmodule Mix.Tasks.Grf.New.PageTest do
   use ExUnit.Case
+
   import GriffinFileHelper
+
+  alias Mix.Tasks.Grf.New.Page
 
   @tag :tmp_dir
   test "writes a new markdown file when called with a single path", %{tmp_dir: tmp_dir} do
-    Mix.Tasks.Grf.New.Page.run([tmp_dir <> "/test.md"])
+    Page.run([tmp_dir <> "/test.md"])
 
     assert_file(tmp_dir <> "/test.md", fn file ->
       assert file =~ "title: \"#{tmp_dir}/test.md\""
@@ -15,7 +18,7 @@ defmodule Mix.Tasks.Grf.New.PageTest do
 
   @tag :tmp_dir
   test "the title changes with the --title option", %{tmp_dir: tmp_dir} do
-    Mix.Tasks.Grf.New.Page.run(["--title", "Testing testing 123", tmp_dir <> "/test.md"])
+    Page.run(["--title", "Testing testing 123", tmp_dir <> "/test.md"])
 
     assert_file(tmp_dir <> "/test.md", fn file ->
       assert file =~ "title: \"Testing testing 123\""
@@ -24,7 +27,7 @@ defmodule Mix.Tasks.Grf.New.PageTest do
 
   @tag :tmp_dir
   test "the draft status is set to true with the --draft option", %{tmp_dir: tmp_dir} do
-    Mix.Tasks.Grf.New.Page.run(["--draft", tmp_dir <> "/test.md"])
+    Page.run(["--draft", tmp_dir <> "/test.md"])
 
     assert_file(tmp_dir <> "/test.md", fn file ->
       assert file =~ "draft: true"

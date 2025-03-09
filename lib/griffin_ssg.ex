@@ -35,21 +35,19 @@ defmodule GriffinSSG do
   Returns `{:ok, map()}` where map contains both the front matter and file content.
   """
   def parse(string_content, _opts \\ []) do
-    try do
-      {front_matter, content} =
-        case String.split(string_content, ~r/\n---\n/, parts: 2) do
-          [content] ->
-            {%{}, content}
+    {front_matter, content} =
+      case String.split(string_content, ~r/\n---\n/, parts: 2) do
+        [content] ->
+          {%{}, content}
 
-          [raw_frontmatter, content] ->
-            {parse_frontmatter(raw_frontmatter), content}
-        end
+        [raw_frontmatter, content] ->
+          {parse_frontmatter(raw_frontmatter), content}
+      end
 
-      {:ok, %{front_matter: front_matter, content: content}}
-    rescue
-      MatchError ->
-        {:error, :parsing_front_matter_failed}
-    end
+    {:ok, %{front_matter: front_matter, content: content}}
+  rescue
+    MatchError ->
+      {:error, :parsing_front_matter_failed}
   end
 
   @doc """
@@ -86,12 +84,10 @@ defmodule GriffinSSG do
           Map.update(current_assigns, :partials, %{}, fn partials ->
             # refactor: reduce nesting level by pulling parts into separate functions.
             # credo:disable-for-lines:3
-            partials
-            |> Enum.map(fn partial ->
+            Map.new(partials, fn partial ->
               {compiled, _bindings} = Code.eval_quoted(partial, assigns: current_assigns)
               compiled
             end)
-            |> Enum.into(%{})
           end)
         else
           current_assigns
@@ -106,8 +102,6 @@ defmodule GriffinSSG do
   defp parse_frontmatter(yaml) do
     {:ok, [parsed]} = YamlElixir.read_all_from_string(yaml, atoms: true)
 
-    parsed
-    |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
-    |> Enum.into(%{})
+    Map.new(parsed, fn {k, v} -> {String.to_atom(k), v} end)
   end
 end
