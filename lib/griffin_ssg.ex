@@ -27,6 +27,24 @@ defmodule GriffinSSG do
   """
 
   @doc """
+  Parses a file at the given path into two components: front matter and file content.
+  """
+  def parse(path, opts \\ []) do
+    parsed_file_path =
+      case Keyword.get(opts, :from_root_directory) do
+        nil ->
+          path
+
+        root_directory ->
+          Path.relative_to(Path.expand(path), Path.expand(root_directory))
+      end
+
+    path
+    |> File.read!()
+    |> parse_string(parsed_file_path)
+  end
+
+  @doc """
   Parses the string contents of a file into two components: front matter and file content.
 
   Front matter is an optional YAML snippet containing variables to be used in the content.
@@ -34,7 +52,7 @@ defmodule GriffinSSG do
 
   Returns `{:ok, map()}` where map contains both the front matter and file content.
   """
-  def parse(string_content, _opts \\ []) do
+  def parse_string(string_content, path \\ nil) do
     {front_matter, content} =
       case String.split(string_content, ~r/\n---\n/, parts: 2) do
         [content] ->
@@ -44,7 +62,7 @@ defmodule GriffinSSG do
           {parse_frontmatter(raw_frontmatter), content}
       end
 
-    {:ok, %{front_matter: front_matter, content: content}}
+    {:ok, %{front_matter: front_matter, content: content, path: path}}
   rescue
     MatchError ->
       {:error, :parsing_front_matter_failed}
@@ -99,9 +117,73 @@ defmodule GriffinSSG do
     result
   end
 
+  @doc """
+  Lists all pages in a directory, returning metadata about each page.
+  The directory page is relative to the project root.
+  """
+  def list_pages(parsed_files, directory, opts \\ []) do
+    parsed_files
+    |> Enum.filter(fn file ->
+      file_inside_directory?(file.path, directory)
+    end)
+    # optional filter
+    |> then(fn files ->
+      case Keyword.get(opts, :filter) do
+        nil ->
+          files
+
+        filter ->
+          Enum.filter(files, fn file ->
+            filter.(file.front_matter)
+          end)
+      end
+    end)
+    # optional sort
+    |> then(fn files ->
+      case Keyword.get(opts, :sort_by) do
+        nil ->
+          files
+
+        :date ->
+          # date sort defaults to descending order
+          sorter = {Keyword.get(opts, :sort_order, :desc), DateTime}
+          Enum.sort_by(files, &get_page_datetime/1, sorter)
+
+        sort ->
+          Enum.sort_by(files, sort, Keyword.get(opts, :sort_order, :asc))
+      end
+    end)
+  end
+
   defp parse_frontmatter(yaml) do
     {:ok, [parsed]} = YamlElixir.read_all_from_string(yaml, atoms: true)
 
     Map.new(parsed, fn {k, v} -> {String.to_atom(k), v} end)
+  end
+
+  defp file_inside_directory?(file, directory) do
+    directory = Path.expand(directory)
+
+    directory_path =
+      if String.ends_with?(directory, "/") do
+        directory
+      else
+        "#{directory}/"
+      end
+
+    String.starts_with?(Path.expand(file), directory_path)
+  end
+
+  defp get_page_datetime(page) do
+    datetime = Map.get(page.front_matter, :date, "")
+
+    case DateTime.from_iso8601(datetime) do
+      {:error, _} ->
+        # make posts without date appear at the end when using the default descending sort
+        DateTime.from_unix!(0)
+
+      {:ok, datetime, _} ->
+        datetime
+    end
   end
 end

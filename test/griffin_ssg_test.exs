@@ -1,10 +1,161 @@
 defmodule GriffinSSGTest do
   use ExUnit.Case, async: true
 
-  describe "parse/1" do
+  describe "list_pages/1" do
+    setup do
+      test_files = [
+        "test/support/files/post.md",
+        "test/support/files/content-only.md",
+        "test/support/files/frontmatter-only.md",
+        # yes, we duplicate the same file here
+        "test/support/files/post.md"
+      ]
+
+      parsed_files =
+        test_files
+        |> Enum.map(fn file -> GriffinSSG.parse(file) end)
+        |> Enum.map(fn {:ok, parsed} -> parsed end)
+
+      [parsed_files: parsed_files]
+    end
+
+    test "correctly lists out all pages in a directory with files", %{parsed_files: parsed_files} do
+      pages = GriffinSSG.list_pages(parsed_files, "test/support/files")
+
+      assert 4 == length(pages)
+
+      # check that path is set on all pages returned
+      refute Enum.any?(pages, fn page -> is_nil(page.path) end)
+
+      # check that the path is relative to the root directory
+      assert Enum.all?(pages, fn page -> String.starts_with?(page.path, "test/support/files/") end)
+    end
+
+    test "returns an empty list with a directory where none of the parsed files were from", %{parsed_files: parsed_files} do
+      assert Enum.empty?(GriffinSSG.list_pages(parsed_files, "lib"))
+    end
+
+    test "returns an empty list with an invalid path", %{parsed_files: parsed_files} do
+      assert Enum.empty?(GriffinSSG.list_pages(parsed_files, "/404/directory-not-found"))
+    end
+
+    test "can filter pages within the given directory", %{parsed_files: parsed_files} do
+      # one of the 4 test files has no frontmatter, so we can filter it out
+      filter_fn = fn frontmatter -> Map.get(frontmatter, :draft) == false end
+
+      pages =
+        GriffinSSG.list_pages(parsed_files, "test/support/files", filter: filter_fn)
+
+      assert 3 == length(pages)
+    end
+
+    test "can sort pages by date", %{parsed_files: parsed_files} do
+      # filter by posts with date set
+      filter_fn = fn frontmatter -> Map.has_key?(frontmatter, :date) end
+
+      # sort by date, default descending order
+      pages =
+        GriffinSSG.list_pages(parsed_files, "test/support/files", filter: filter_fn, sort_by: :date, sort_order: :desc)
+
+      assert 3 == length(pages)
+
+      page_dates =
+        Enum.map(pages, fn page ->
+          {:ok, date, _} = DateTime.from_iso8601(page.front_matter.date)
+          date
+        end)
+
+      assert page_dates == Enum.sort(page_dates, {:desc, DateTime})
+
+      # sort by date, ascending
+      pages =
+        GriffinSSG.list_pages(parsed_files, "test/support/files", filter: filter_fn, sort_by: :date, sort_order: :asc)
+
+      page_dates =
+        Enum.map(pages, fn page ->
+          {:ok, date, _} = DateTime.from_iso8601(page.front_matter.date)
+          date
+        end)
+
+      assert page_dates == Enum.sort(page_dates, {:asc, DateTime})
+
+      # sort by date, descending
+      pages =
+        GriffinSSG.list_pages(parsed_files, "test/support/files", filter: filter_fn, sort_by: :date, sort_order: :desc)
+
+      page_dates =
+        Enum.map(pages, fn page ->
+          {:ok, date, _} = DateTime.from_iso8601(page.front_matter.date)
+          date
+        end)
+
+      assert page_dates == Enum.sort(page_dates, {:desc, DateTime})
+    end
+
+    test "can sort by other fields", %{parsed_files: parsed_files} do
+      # sort by title, ascending
+      pages =
+        GriffinSSG.list_pages(parsed_files, "test/support/files",
+          filter: fn frontmatter -> Map.has_key?(frontmatter, :title) end,
+          sort_by: &Map.get(&1.front_matter, :title),
+          sort_order: :asc
+        )
+
+      # one of the files has no title, so it should be filtered out
+      assert 3 == length(pages)
+
+      page_titles = Enum.map(pages, fn page -> page.front_matter.title end)
+
+      assert page_titles == Enum.sort(page_titles, :asc)
+
+      # sort by title, descending
+      pages =
+        GriffinSSG.list_pages(parsed_files, "test/support/files",
+          filter: fn frontmatter -> Map.has_key?(frontmatter, :title) end,
+          sort_by: &Map.get(&1.front_matter, :title),
+          sort_order: :desc
+        )
+
+      page_titles = Enum.map(pages, fn page -> page.front_matter.title end)
+
+      assert page_titles == Enum.sort(page_titles, :desc)
+    end
+  end
+
+  describe "parse/2" do
+    test "parses a valid file and fills in path" do
+      assert {:ok, %{front_matter: frontmatter, content: content, path: path}} =
+               GriffinSSG.parse("test/support/files/post.md")
+
+      assert frontmatter.title == "Griffin Static Site Generator"
+      assert frontmatter.date == "2022-06-14T10:01:55.506374Z"
+      assert frontmatter.draft == false
+
+      assert content =~ "Griffin Static Site Generator"
+      assert content =~ "Griffin is a framework for building static sites"
+
+      assert path == "test/support/files/post.md"
+    end
+
+    test "parses a valid file and fills in relative path" do
+      assert {:ok, %{front_matter: frontmatter, content: content, path: path}} =
+               GriffinSSG.parse("test/support/files/post.md", from_root_directory: "test/support")
+
+      assert frontmatter.title == "Griffin Static Site Generator"
+      assert frontmatter.date == "2022-06-14T10:01:55.506374Z"
+      assert frontmatter.draft == false
+
+      assert content =~ "Griffin Static Site Generator"
+      assert content =~ "Griffin is a framework for building static sites"
+
+      assert path == "files/post.md"
+    end
+  end
+
+  describe "parse_string/2" do
     test "parses files with frontmatter and content" do
       assert {:ok, %{front_matter: frontmatter, content: content}} =
-               GriffinSSG.parse("""
+               GriffinSSG.parse_string("""
                ---
                title: "Griffin Static Site Generator"
                date: "2022-06-14T10:01:55.506374Z"
@@ -24,7 +175,7 @@ defmodule GriffinSSGTest do
 
     test "parses files that only contain frontmatter" do
       assert {:ok, %{front_matter: frontmatter, content: content}} =
-               GriffinSSG.parse("""
+               GriffinSSG.parse_string("""
                ---
                title: "Griffin -- Frontmatter only file"
                date: "2022-06-14T09:45:55.506374Z"
@@ -41,7 +192,7 @@ defmodule GriffinSSGTest do
 
     test "parses files that only contain content" do
       assert {:ok, %{front_matter: frontmatter, content: content}} =
-               GriffinSSG.parse("""
+               GriffinSSG.parse_string("""
                # Content Only
                This is a test file containing markdown only.
                """)
