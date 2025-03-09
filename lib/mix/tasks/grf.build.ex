@@ -319,109 +319,11 @@ defmodule Mix.Tasks.Grf.Build do
 
   @input_extnames [".md", ".markdown", ".eex"]
 
+  @parsed_files_table :griffin_build_parsed_files
+
   @impl Mix.Task
   def run(args, _test_opts \\ []) do
-    {time_in_microseconds, files_written} =
-      :timer.tc(fn ->
-        {opts, _parsed} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
-
-        # Configuration hierarchy:
-        # Environment Variables > Command Line Arguments >
-        # > Config File > Application Config > Defaults
-
-        opts =
-          @default_opts
-          |> Map.merge(application_config())
-          |> Map.merge(file_config(opts[:config]))
-          |> Map.merge(Map.new(opts))
-          |> Map.merge(environment_config())
-
-        directories = %{
-          input: opts.input,
-          output: opts.output,
-          layouts: opts.layouts,
-          partials: opts.layouts <> "/partials",
-          data: opts.data
-        }
-
-        validate_directories!(directories, opts)
-
-        for hook <- opts.hooks.before do
-          hook.({directories, opts.run_mode, opts.output_mode})
-        end
-
-        # import global assigns from data directory
-        global_assigns =
-          opts
-          |> fetch_assigns_from_data_dir()
-          |> Map.put(:griffin, @griffin)
-
-        opts = Map.put(opts, :global_assigns, global_assigns)
-
-        copy_passthrough_files!(opts)
-
-        compile_layouts!(opts)
-
-        # subtract ignore files from files list
-        ignore_files =
-          opts.ignore
-          |> maybe_parse_csv()
-          |> Enum.flat_map(&Filesystem.list_all(&1))
-          |> Enum.concat(Filesystem.git_ignores())
-
-        files = Filesystem.search_directory(opts.input, @input_extnames) -- ignore_files
-
-        # the first stage parses all files, returning metadata that will be used
-        # to build collections, which needs to be done before any file is actually
-        # rendered
-
-        {:ok, sup} = Task.Supervisor.start_link()
-
-        tasks =
-          for file <- files do
-            Task.Supervisor.async_nolink(sup, __MODULE__, :parse_file, [file, opts], ordered: false)
-          end
-
-        parsed_files =
-          for task <- tasks do
-            Task.await(task, :infinity)
-          end
-
-        collections =
-          Map.new(opts.collections, fn {collection_name, config} ->
-            # refactor: terrible efficiency, we're traversing the parsed list files
-            # once per collection. Since most sites will have 1-2 collections max,
-            # we're fine with this for now.
-            {collection_name, compile_collection(collection_name, parsed_files, Map.merge(opts, config))}
-          end)
-
-        opts = Map.put(opts, :collections, collections)
-
-        tasks =
-          for metadata <- parsed_files do
-            # refactor: consider setting collections globally on ETS or persistent term
-            Task.Supervisor.async_nolink(
-              sup,
-              __MODULE__,
-              :render_file,
-              [metadata.output, metadata, opts],
-              ordered: false
-            )
-          end
-
-        results =
-          for task <- tasks do
-            Task.await(task, :infinity)
-          end
-
-        render_collections_pages(collections, opts)
-
-        for hook <- opts.hooks.after do
-          hook.({directories, results, opts.run_mode, opts.output_mode})
-        end
-
-        length(results)
-      end)
+    {time_in_microseconds, files_written} = :timer.tc(fn -> do_run(args) end)
 
     time_elapsed = :erlang.float_to_binary(time_in_microseconds / 1_000_000, decimals: 2)
 
@@ -435,12 +337,115 @@ defmodule Mix.Tasks.Grf.Build do
     Mix.shell().info("Wrote #{files_written} files in #{time_elapsed} seconds (#{time_per_file}ms each, v#{@version})")
   end
 
+  defp do_run(args) do
+    {opts, _parsed} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
+
+    # Configuration hierarchy:
+    # Environment Variables > Command Line Arguments >
+    # > Config File > Application Config > Defaults
+
+    opts =
+      @default_opts
+      |> Map.merge(application_config())
+      |> Map.merge(file_config(opts[:config]))
+      |> Map.merge(Map.new(opts))
+      |> Map.merge(environment_config())
+
+    directories = %{
+      input: opts.input,
+      output: opts.output,
+      layouts: opts.layouts,
+      partials: opts.layouts <> "/partials",
+      data: opts.data
+    }
+
+    validate_directories!(directories, opts)
+
+    for hook <- opts.hooks.before do
+      hook.({directories, opts.run_mode, opts.output_mode})
+    end
+
+    # import global assigns from data directory
+    global_assigns =
+      opts
+      |> fetch_assigns_from_data_dir()
+      |> Map.put(:griffin, @griffin)
+
+    opts = Map.put(opts, :global_assigns, global_assigns)
+
+    copy_passthrough_files!(opts)
+
+    compile_layouts!(opts)
+
+    # subtract ignore files from files list
+    ignore_files =
+      opts.ignore
+      |> maybe_parse_csv()
+      |> Enum.flat_map(&Filesystem.list_all(&1))
+      |> Enum.concat(Filesystem.git_ignores())
+
+    files = Filesystem.search_directory(opts.input, @input_extnames) -- ignore_files
+
+    # the first stage parses all files, returning metadata that will be used
+    # to build collections, which needs to be done before any file is actually
+    # rendered
+
+    {:ok, sup} = Task.Supervisor.start_link()
+
+    tasks =
+      for file <- files do
+        Task.Supervisor.async_nolink(sup, __MODULE__, :parse_file, [file, opts], ordered: false)
+      end
+
+    parsed_files =
+      for task <- tasks do
+        Task.await(task, :infinity)
+      end
+
+    cache_parsed_files!(parsed_files)
+
+    collections =
+      Map.new(opts.collections, fn {collection_name, config} ->
+        # refactor: terrible efficiency, we're traversing the parsed list files
+        # once per collection. Since most sites will have 1-2 collections max,
+        # we're fine with this for now.
+        {collection_name, compile_collection(collection_name, parsed_files, Map.merge(opts, config))}
+      end)
+
+    opts = Map.put(opts, :collections, collections)
+
+    tasks =
+      for metadata <- parsed_files do
+        # refactor: consider setting collections globally on ETS or persistent term
+        Task.Supervisor.async_nolink(
+          sup,
+          __MODULE__,
+          :render_file,
+          [metadata.output, metadata, opts],
+          ordered: false
+        )
+      end
+
+    results =
+      for task <- tasks do
+        Task.await(task, :infinity)
+      end
+
+    render_collections_pages(collections, opts)
+
+    for hook <- opts.hooks.after do
+      hook.({directories, results, opts.run_mode, opts.output_mode})
+    end
+
+    length(results)
+  end
+
   @doc false
   def parse_file(file, config) do
     output_path = config.output
     input_path = config.input
 
-    {:ok, %{front_matter: front_matter, content: content}} = GriffinSSG.parse(File.read!(file))
+    {:ok, %{front_matter: front_matter, content: content}} = GriffinSSG.parse_string(File.read!(file))
 
     file_output_path =
       if Map.has_key?(front_matter, :permalink) do
@@ -485,6 +490,7 @@ defmodule Mix.Tasks.Grf.Build do
 
     layout_assigns =
       filters_assigns()
+      |> Map.put(:list_pages, &list_pages_with_cached_files/2)
       |> Map.merge(shortcodes_assigns())
       |> Map.merge(partials_assigns())
       |> Map.merge(opts.global_assigns)
@@ -537,6 +543,7 @@ defmodule Mix.Tasks.Grf.Build do
 
     layout_assigns =
       filters_assigns()
+      |> Map.put(:list_pages, &list_pages_with_cached_files/1)
       |> Map.merge(shortcodes_assigns())
       |> Map.merge(partials_assigns())
       |> Map.merge(opts.global_assigns)
@@ -747,9 +754,13 @@ defmodule Mix.Tasks.Grf.Build do
     ets_lookup(:griffin_build_layouts, name)
   end
 
-  defp ets_lookup(table, key) do
+  defp fetch_parsed_files do
+    ets_lookup(@parsed_files_table, :parsed_files, [])
+  end
+
+  defp ets_lookup(table, key, default \\ nil) do
     case :ets.lookup(table, key) do
-      [] -> nil
+      [] -> default
       [{^key, value}] -> value
     end
   end
@@ -836,4 +847,13 @@ defmodule Mix.Tasks.Grf.Build do
 
   defp pluralize(string, 1), do: string
   defp pluralize(string, _), do: string <> "s"
+
+  defp cache_parsed_files!(parsed_files) do
+    :ets.new(@parsed_files_table, [:set, :named_table])
+    :ets.insert(@parsed_files_table, {:parsed_files, parsed_files})
+  end
+
+  defp list_pages_with_cached_files(directory, opts \\ []) do
+    GriffinSSG.list_pages(fetch_parsed_files(), directory, opts)
+  end
 end

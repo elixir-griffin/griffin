@@ -418,7 +418,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
 
   @tag :tmp_dir
   test "calls hooks before and after executing", %{tmp_dir: tmp_dir} do
-    config_file = File.read!("test/files/config/hooks_only.ex")
+    config_file = File.read!("test/support/files/config/hooks_only.ex")
 
     File.mkdir_p!(tmp_dir)
     :ok = File.write(tmp_dir <> "/config.ex", config_file)

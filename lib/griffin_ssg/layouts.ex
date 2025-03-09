@@ -164,7 +164,7 @@ defmodule GriffinSSG.Layouts do
     layout =
       file
       |> File.read!()
-      |> GriffinSSG.parse()
+      |> GriffinSSG.parse_string()
       |> then(fn {:ok, result} -> result end)
 
     case maybe_compile_layout(layout, layout_name, layout_names) do
