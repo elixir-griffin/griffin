@@ -32,11 +32,11 @@ defmodule GriffinSSGTest do
     end
 
     test "returns an empty list with a directory where none of the parsed files were from", %{parsed_files: parsed_files} do
-      assert 0 == length(GriffinSSG.list_pages(parsed_files, "lib"))
+      assert Enum.empty?(GriffinSSG.list_pages(parsed_files, "lib"))
     end
 
     test "returns an empty list with an invalid path", %{parsed_files: parsed_files} do
-      assert 0 == length(GriffinSSG.list_pages(parsed_files, "/404/directory-not-found"))
+      assert Enum.empty?(GriffinSSG.list_pages(parsed_files, "/404/directory-not-found"))
     end
 
     test "can filter pages within the given directory", %{parsed_files: parsed_files} do
