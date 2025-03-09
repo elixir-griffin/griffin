@@ -61,7 +61,8 @@ defmodule GriffinSSG.Layouts do
             # Additionally, for partials, we specifically convert the name
             # into an atom so it can be referred in a layout as @partials.name.
             layout_name =
-              Path.basename(filepath)
+              filepath
+              |> Path.basename()
               |> String.split(".")
               |> hd()
               |> String.to_atom()
@@ -155,7 +156,8 @@ defmodule GriffinSSG.Layouts do
     # Using Path.extname/1 doesn't work here because layout files
     # can use multiple extensions (e.g. root.html.eex)
     layout_name =
-      Path.basename(file)
+      file
+      |> Path.basename()
       |> String.split(".")
       |> hd()
 
@@ -183,10 +185,8 @@ defmodule GriffinSSG.Layouts do
     else
       parent = front_matter.layout
 
-      unless parent in all_layouts do
-        Mix.raise(
-          "Layout #{name} specified parent layout `#{parent}` but no such layout was found"
-        )
+      if parent not in all_layouts do
+        Mix.raise("Layout #{name} specified parent layout `#{parent}` but no such layout was found")
       end
 
       parent_layout = fetch_layout_string(parent)

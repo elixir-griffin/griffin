@@ -1,6 +1,8 @@
 defmodule GriffinSSG.FilesystemTest do
   use ExUnit.Case, async: true
+
   import Assertions, only: [assert_lists_equal: 2]
+
   alias GriffinSSG.Filesystem
 
   @files [

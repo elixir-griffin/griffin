@@ -31,8 +31,7 @@ defmodule GriffinSSG.Filesystem do
           errors
 
         {{:error, reason}, {:ok, _count}} ->
-          {:errors,
-           ["Unable to copy passthrough file from #{path} to #{cp_destination}: `#{reason}`"]}
+          {:errors, ["Unable to copy passthrough file from #{path} to #{cp_destination}: `#{reason}`"]}
 
         {{:error, reason}, errors} ->
           {:errors,

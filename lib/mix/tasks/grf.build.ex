@@ -250,8 +250,8 @@ defmodule Mix.Tasks.Grf.Build do
 
   use Mix.Task
 
-  alias GriffinSSG.Layouts
   alias GriffinSSG.Filesystem
+  alias GriffinSSG.Layouts
 
   @version Mix.Project.config()[:version]
 
@@ -333,7 +333,7 @@ defmodule Mix.Tasks.Grf.Build do
           @default_opts
           |> Map.merge(application_config())
           |> Map.merge(file_config(opts[:config]))
-          |> Map.merge(Enum.into(opts, %{}))
+          |> Map.merge(Map.new(opts))
           |> Map.merge(environment_config())
 
         directories = %{
@@ -354,7 +354,7 @@ defmodule Mix.Tasks.Grf.Build do
         global_assigns =
           opts
           |> fetch_assigns_from_data_dir()
-          |> Map.merge(%{griffin: @griffin})
+          |> Map.put(:griffin, @griffin)
 
         opts = Map.put(opts, :global_assigns, global_assigns)
 
@@ -379,9 +379,7 @@ defmodule Mix.Tasks.Grf.Build do
 
         tasks =
           for file <- files do
-            Task.Supervisor.async_nolink(sup, __MODULE__, :parse_file, [file, opts],
-              ordered: false
-            )
+            Task.Supervisor.async_nolink(sup, __MODULE__, :parse_file, [file, opts], ordered: false)
           end
 
         parsed_files =
@@ -390,15 +388,12 @@ defmodule Mix.Tasks.Grf.Build do
           end
 
         collections =
-          opts.collections
-          |> Enum.map(fn {collection_name, config} ->
+          Map.new(opts.collections, fn {collection_name, config} ->
             # refactor: terrible efficiency, we're traversing the parsed list files
             # once per collection. Since most sites will have 1-2 collections max,
             # we're fine with this for now.
-            {collection_name,
-             compile_collection(collection_name, parsed_files, Map.merge(opts, config))}
+            {collection_name, compile_collection(collection_name, parsed_files, Map.merge(opts, config))}
           end)
-          |> Enum.into(%{})
 
         opts = Map.put(opts, :collections, collections)
 
@@ -437,9 +432,7 @@ defmodule Mix.Tasks.Grf.Build do
         0
       end
 
-    Mix.shell().info(
-      "Wrote #{files_written} files in #{time_elapsed} seconds (#{time_per_file}ms each, v#{@version})"
-    )
+    Mix.shell().info("Wrote #{files_written} files in #{time_elapsed} seconds (#{time_per_file}ms each, v#{@version})")
   end
 
   @doc false
@@ -462,8 +455,7 @@ defmodule Mix.Tasks.Grf.Build do
       |> String.trim_trailing("index.html")
 
     date =
-      front_matter
-      |> Map.get_lazy(:date, fn ->
+      Map.get_lazy(front_matter, :date, fn ->
         timestamp = File.stat!(file, time: :posix).ctime
 
         timestamp
@@ -488,16 +480,7 @@ defmodule Mix.Tasks.Grf.Build do
   end
 
   @doc false
-  def render_file(
-        file,
-        %{
-          page: page,
-          data: data,
-          content: content,
-          input: input_path
-        },
-        opts
-      ) do
+  def render_file(file, %{page: page, data: data, content: content, input: input_path}, opts) do
     layout_name = Map.get(data, :layout, "__fallback__")
 
     layout_assigns =
@@ -525,11 +508,11 @@ defmodule Mix.Tasks.Grf.Build do
         }
       )
 
-    unless opts.quiet do
+    if !opts.quiet do
       Mix.shell().info("writing: #{file} from #{input_path} (markdown)")
     end
 
-    unless opts.dry_run do
+    if !opts.dry_run do
       file
       |> Path.dirname()
       |> Path.expand()
@@ -549,16 +532,7 @@ defmodule Mix.Tasks.Grf.Build do
 
   # refactor: this function shares much of the logic of render_file.
   @doc false
-  def render_collection_file(
-        file,
-        %{
-          page: page,
-          data: data,
-          content: content,
-          input: input_path
-        },
-        opts
-      ) do
+  def render_collection_file(file, %{page: page, data: data, content: content, input: input_path}, opts) do
     layout = Map.fetch!(data, :layout)
 
     layout_assigns =
@@ -581,11 +555,11 @@ defmodule Mix.Tasks.Grf.Build do
         }
       )
 
-    unless opts.quiet do
+    if !opts.quiet do
       Mix.shell().info("writing: #{file}")
     end
 
-    unless opts.dry_run do
+    if !opts.dry_run do
       file
       |> Path.dirname()
       |> Path.expand()
@@ -666,20 +640,18 @@ defmodule Mix.Tasks.Grf.Build do
       end
 
     if opts.debug do
-      Mix.shell().info(
-        "Stored data in global assigns from #{num_files} #{pluralize("file", num_files)}"
-      )
+      Mix.shell().info("Stored data in global assigns from #{num_files} #{pluralize("file", num_files)}")
     end
 
     assigns
   end
 
   defp validate_directories!(directories, opts) do
-    unless File.exists?(directories.input) do
+    if !File.exists?(directories.input) do
       Mix.raise("Invalid input directory: `#{directories.input}`")
     end
 
-    unless File.dir?(directories.output) or not File.exists?(directories.output) do
+    if !(File.dir?(directories.output) or not File.exists?(directories.output)) do
       Mix.raise("Invalid output directory: `#{directories.output}`")
     end
 
@@ -694,7 +666,7 @@ defmodule Mix.Tasks.Grf.Build do
   end
 
   defp copy_passthrough_files!(opts) do
-    unless opts.dry_run do
+    if !opts.dry_run do
       {elapsed_microseconds, num_files} =
         :timer.tc(fn ->
           opts.passthrough_copies
@@ -710,12 +682,10 @@ defmodule Mix.Tasks.Grf.Build do
           end)
         end)
 
-      unless opts.quiet do
+      if !opts.quiet do
         elapsed_milliseconds = :erlang.float_to_binary(elapsed_microseconds / 1_000, decimals: 1)
 
-        Mix.shell().info(
-          "Copied #{num_files} passthrough #{pluralize("file", num_files)} in #{elapsed_milliseconds}ms"
-        )
+        Mix.shell().info("Copied #{num_files} passthrough #{pluralize("file", num_files)} in #{elapsed_milliseconds}ms")
       end
     end
   end
@@ -762,7 +732,7 @@ defmodule Mix.Tasks.Grf.Build do
   defp compile_layouts!(opts) do
     case Layouts.compile_layouts(opts.layouts) do
       {:ok, num_layouts, num_partials} ->
-        unless opts.quiet do
+        if !opts.quiet do
           Mix.shell().info(
             "Compiled #{num_layouts + num_partials} layouts (#{num_partials} #{pluralize("partial", num_partials)})"
           )
@@ -792,8 +762,7 @@ defmodule Mix.Tasks.Grf.Build do
 
   defp application_config do
     @all_options
-    |> Enum.map(fn option -> {option, get_app_env(option)} end)
-    |> Enum.into(%{})
+    |> Map.new(fn option -> {option, get_app_env(option)} end)
     |> Map.filter(fn {_, v} -> not is_nil(v) end)
   end
 
@@ -811,8 +780,7 @@ defmodule Mix.Tasks.Grf.Build do
 
   defp environment_config do
     @all_options
-    |> Enum.map(fn option -> {option, get_env(option)} end)
-    |> Enum.into(%{})
+    |> Map.new(fn option -> {option, get_env(option)} end)
     |> Map.filter(fn {_, v} -> not is_nil(v) end)
   end
 
@@ -828,7 +796,7 @@ defmodule Mix.Tasks.Grf.Build do
     Application.get_env(:griffin_ssg, key, default)
   end
 
-  defp partials_assigns() do
+  defp partials_assigns do
     :griffin_build_layouts
     |> :ets.lookup(:__partials__)
     |> then(fn [{:__partials__, partials}] ->
@@ -836,11 +804,11 @@ defmodule Mix.Tasks.Grf.Build do
     end)
   end
 
-  defp filters_assigns() do
+  defp filters_assigns do
     Map.merge(default_filters(), get_app_env(:filters, %{}))
   end
 
-  defp default_filters() do
+  defp default_filters do
     %{
       slugify: &Slug.slugify/1,
       uppercase: &String.upcase/1,
@@ -848,7 +816,7 @@ defmodule Mix.Tasks.Grf.Build do
     }
   end
 
-  defp shortcodes_assigns() do
+  defp shortcodes_assigns do
     Map.merge(default_shortcodes(), get_app_env(:shortcodes, %{}))
   end
 

@@ -1,6 +1,4 @@
 defmodule Mix.Tasks.Grf.Server do
-  use Mix.Task
-
   @shortdoc "Generates a static website and listens for changes."
 
   @moduledoc """
@@ -9,6 +7,8 @@ defmodule Mix.Tasks.Grf.Server do
   on file change, but does not reload the file in the browser.
   This server is NOT meant to be run in production.
   """
+  use Mix.Task
+
   require Logger
 
   @requirements ["app.config", "grf.build"]
@@ -50,8 +50,7 @@ defmodule Mix.Tasks.Grf.Server do
     end
 
     children = [
-      {Plug.Cowboy,
-       scheme: :http, plug: GriffinSSG.Web.Plug, options: [port: port, dispatch: dispatch()]},
+      {Plug.Cowboy, scheme: :http, plug: GriffinSSG.Web.Plug, options: [port: port, dispatch: dispatch()]},
       {GriffinSSG.Filesystem.Watcher, [input_directories, on_file_change_callback]}
     ]
 
@@ -76,7 +75,7 @@ defmodule Mix.Tasks.Grf.Server do
     integer
   end
 
-  defp dispatch() do
+  defp dispatch do
     [
       {:_,
        [

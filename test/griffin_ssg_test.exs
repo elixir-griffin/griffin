@@ -55,7 +55,7 @@ defmodule GriffinSSGTest do
   describe "render/2" do
     test "renders layout variables from assigns map" do
       layout =
-        """
+        EEx.compile_string("""
         <main>
         <p><%= @phrase %></p>
         <%= for thing <- @things do %>
@@ -63,8 +63,7 @@ defmodule GriffinSSGTest do
         <% end %>
         <%= @content %>
         </main>
-        """
-        |> EEx.compile_string()
+        """)
 
       output =
         GriffinSSG.render(layout, %{
@@ -92,9 +91,7 @@ defmodule GriffinSSGTest do
       Markdown is a cool format
       """
 
-      layout =
-        "<main><%= @content %></main>"
-        |> EEx.compile_string()
+      layout = EEx.compile_string("<main><%= @content %></main>")
 
       output =
         GriffinSSG.render(layout, %{
@@ -113,9 +110,7 @@ defmodule GriffinSSGTest do
       <p>Markdown is a cool format</p>
       """
 
-      layout =
-        "<main><%= @content %></main>"
-        |> EEx.compile_string()
+      layout = EEx.compile_string("<main><%= @content %></main>")
 
       output =
         GriffinSSG.render(layout, %{
@@ -133,9 +128,7 @@ defmodule GriffinSSGTest do
       <p>Markdown is a cool format</p>
       """
 
-      layout =
-        "<main><%= @content %></main>"
-        |> EEx.compile_string()
+      layout = EEx.compile_string("<main><%= @content %></main>")
 
       output =
         GriffinSSG.render(layout, %{
