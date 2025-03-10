@@ -20,7 +20,7 @@ defmodule GriffinSSG.Layouts do
         :ok
     end
 
-    layout_partials_dir = layouts_dir <> "/partials"
+    layout_partials_dir = Path.join(layouts_dir, "/partials")
 
     layout_files = GriffinSSG.Filesystem.search_directory(layouts_dir, @layout_extnames)
 

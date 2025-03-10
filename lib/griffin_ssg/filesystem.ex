@@ -19,9 +19,9 @@ defmodule GriffinSSG.Filesystem do
     |> Enum.flat_map(&list_all(&1))
     |> Enum.reduce({:ok, 0}, fn path, acc ->
       # e.g. file 'a/b/c/d.js' will be copied to '<destination>/a/b/c/d.js'
-      File.mkdir_p(destination <> "/" <> Path.dirname(path))
+      File.mkdir_p(Path.join(destination, Path.dirname(path)))
 
-      cp_destination = destination <> "/" <> Path.relative_to_cwd(path)
+      cp_destination = Path.join(destination, Path.relative_to_cwd(path))
 
       case {File.cp(path, cp_destination), acc} do
         {:ok, {:ok, count}} ->
@@ -97,7 +97,7 @@ defmodule GriffinSSG.Filesystem do
           name <> "/index.html"
       end
 
-    output_dir <> dirname <> filename
+    Path.join([output_dir, dirname, filename])
   end
 
   def git_ignores(path \\ ".gitignore") do

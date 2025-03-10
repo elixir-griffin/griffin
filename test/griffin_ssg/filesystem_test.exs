@@ -31,7 +31,7 @@ defmodule GriffinSSG.FilesystemTest do
     test "returns `{:ok, count}` when all files are successfully copied", %{tmp_dir: tmp_dir} do
       setup_files(@files, tmp_dir)
       directories = [tmp_dir]
-      destination = tmp_dir <> "/zzz"
+      destination = Path.join(tmp_dir, "/zzz")
       result = Filesystem.copy_all(directories, destination)
 
       assert result == {:ok, length(@files)}
@@ -46,7 +46,7 @@ defmodule GriffinSSG.FilesystemTest do
   test "returns a complete list of files when searching the base directory", %{tmp_dir: tmp_dir} do
     setup_files(@files, tmp_dir)
 
-    prefixed_files = Enum.map(@files, fn file -> tmp_dir <> "/" <> file end)
+    prefixed_files = Enum.map(@files, fn file -> Path.join(tmp_dir, file) end)
     assert_lists_equal(prefixed_files, Filesystem.list_all(tmp_dir))
   end
 
@@ -54,16 +54,16 @@ defmodule GriffinSSG.FilesystemTest do
   test "can expand wildcard paths as expected", %{tmp_dir: tmp_dir} do
     setup_files(@files, tmp_dir)
 
-    prefixed_files = Enum.map(@files, fn file -> tmp_dir <> "/" <> file end)
-    assert_lists_equal(prefixed_files, Filesystem.list_all(tmp_dir <> "/**"))
+    prefixed_files = Enum.map(@files, fn file -> Path.join(tmp_dir, file) end)
+    assert_lists_equal(prefixed_files, Filesystem.list_all(Path.join(tmp_dir, "/**")))
 
-    assert length(Filesystem.list_all(tmp_dir <> "/**/*.{png,jpeg}")) == 4
-    assert length(Filesystem.list_all(tmp_dir <> "/**/*.mp4")) == 2
-    assert length(Filesystem.list_all(tmp_dir <> "/**/img.*")) == 3
+    assert length(Filesystem.list_all(Path.join(tmp_dir, "/**/*.{png,jpeg}"))) == 4
+    assert length(Filesystem.list_all(Path.join(tmp_dir, "/**/*.mp4"))) == 2
+    assert length(Filesystem.list_all(Path.join(tmp_dir, "/**/img.*"))) == 3
 
-    assert [] == Filesystem.list_all(tmp_dir <> "/*.mp4")
-    assert [] == Filesystem.list_all(tmp_dir <> "/f/*.cpp")
-    assert [] == Filesystem.list_all(tmp_dir <> "/**/*.lua")
+    assert [] == Filesystem.list_all(Path.join(tmp_dir, "/*.mp4"))
+    assert [] == Filesystem.list_all(Path.join(tmp_dir, "/f/*.cpp"))
+    assert [] == Filesystem.list_all(Path.join(tmp_dir, "/**/*.lua"))
   end
 
   test "calculates files output paths correctly" do

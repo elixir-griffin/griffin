@@ -355,7 +355,7 @@ defmodule Mix.Tasks.Grf.Build do
       input: opts.input,
       output: opts.output,
       layouts: opts.layouts,
-      partials: opts.layouts <> "/partials",
+      partials: Path.join(opts.layouts, "/partials"),
       data: opts.data
     }
 
