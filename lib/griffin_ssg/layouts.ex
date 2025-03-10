@@ -8,11 +8,13 @@ defmodule GriffinSSG.Layouts do
   @layouts_max_nesting_level 10
   @compiled_layouts_table :griffin_build_layouts
   @layout_strings_table :griffin_build_layout_strings
+  @layout_assigns_table :griffin_build_layout_assigns
 
   def compile_layouts(layouts_dir) do
     try do
       :ets.new(@compiled_layouts_table, [:ordered_set, :public, :named_table])
       :ets.new(@layout_strings_table, [:ordered_set, :public, :named_table])
+      :ets.new(@layout_assigns_table, [:ordered_set, :public, :named_table])
     rescue
       ArgumentError ->
         :ok
@@ -90,6 +92,21 @@ defmodule GriffinSSG.Layouts do
 
         {:error, :layout_cyclic_dependency, errored_layouts}
     end
+  end
+
+  @doc """
+  Fetches the compiled layout by name.
+  """
+  def get_compiled_layout(name) do
+    ets_lookup(@compiled_layouts_table, name)
+  end
+
+  @doc """
+  Fetches the assigns for a layout by name.
+  Returns an empty map if there are no assigns.
+  """
+  def get_layout_assigns(name) do
+    ets_lookup(@layout_assigns_table, name, %{})
   end
 
   def fallback_list_collection_layout do
@@ -177,11 +194,12 @@ defmodule GriffinSSG.Layouts do
   end
 
   defp maybe_compile_layout(%{front_matter: front_matter, content: content}, name, all_layouts) do
+    # layouts can have assigns other than layout, so we need to store them
+    layout_assigns = Map.delete(front_matter, :layout)
+
     if front_matter[:layout] == nil do
       # layout has no parent
-      insert_layout(name, content)
-      insert_layout_string(name, content)
-      :ok
+      add_layout(name, content, layout_assigns)
     else
       parent = front_matter.layout
 
@@ -218,11 +236,22 @@ defmodule GriffinSSG.Layouts do
           end)
 
         merged_content = String.replace(parent_layout, pattern, content)
-        insert_layout(name, merged_content)
-        insert_layout_string(name, merged_content)
-        :ok
+        merged_assigns = parent |> get_layout_assigns() |> Map.merge(layout_assigns)
+
+        add_layout(name, merged_content, merged_assigns)
       end
     end
+  end
+
+  defp add_layout(name, content, assigns) do
+    insert_layout(name, content)
+    insert_layout_string(name, content)
+
+    if not Enum.empty?(assigns) do
+      insert_layout_assigns(name, assigns)
+    end
+
+    :ok
   end
 
   defp insert_layout(name, string) do
@@ -233,21 +262,21 @@ defmodule GriffinSSG.Layouts do
     ets_insert(@layout_strings_table, name, string)
   end
 
+  defp insert_layout_assigns(name, assigns) do
+    ets_insert(@layout_assigns_table, name, assigns)
+  end
+
   defp fetch_layout_string(name) do
     ets_lookup(@layout_strings_table, name)
   end
-
-  # defp fetch_layout(name) do
-  #   ets_lookup(@compiled_layouts_table, name)
-  # end
 
   defp ets_insert(table, key, value) do
     :ets.insert(table, {key, value})
   end
 
-  defp ets_lookup(table, key) do
+  defp ets_lookup(table, key, default \\ nil) do
     case :ets.lookup(table, key) do
-      [] -> nil
+      [] -> default
       [{^key, value}] -> value
     end
   end

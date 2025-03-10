@@ -457,11 +457,12 @@ defmodule Mix.Tasks.Grf.Build do
       |> Map.merge(shortcodes_assigns())
       |> Map.merge(partials_assigns())
       |> Map.merge(opts.global_assigns)
+      |> Map.merge(Layouts.get_layout_assigns(layout_name))
       |> Map.merge(%{page: page, collections: opts.collections})
       |> Map.merge(data)
       |> Map.put_new(:title, "Griffin")
 
-    layout = fetch_layout(layout_name)
+    layout = Layouts.get_compiled_layout(layout_name)
 
     if layout == nil do
       Mix.raise("File #{file} specified layout `#{layout_name}` but no such layout was found")
@@ -715,15 +716,11 @@ defmodule Mix.Tasks.Grf.Build do
     end
   end
 
-  defp fetch_layout(name) do
-    ets_lookup(:griffin_build_layouts, name)
-  end
-
   defp fetch_parsed_files do
     ets_lookup(@parsed_files_table, :parsed_files, [])
   end
 
-  defp ets_lookup(table, key, default \\ nil) do
+  defp ets_lookup(table, key, default) do
     case :ets.lookup(table, key) do
       [] -> default
       [{^key, value}] -> value

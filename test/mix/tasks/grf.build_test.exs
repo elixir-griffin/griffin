@@ -188,7 +188,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
   end
 
   @tag :tmp_dir
-  test "can render nested layouts", %{tmp_dir: tmp_dir} do
+  test "can render nested layouts with assigns", %{tmp_dir: tmp_dir} do
     File.mkdir_p!(tmp_dir <> "/src")
 
     File.write!(tmp_dir <> "/src/a.md", """
@@ -209,16 +209,18 @@ defmodule Mix.Tasks.Grf.BuildTest do
     File.write!(tmp_dir <> "/layouts/b.eex", """
     ---
     layout: "a"
+    language: Elixir
     ---
     <h1>Griffin Times</h1>
     <%= @content%>
     """)
 
+    # lets reference a frontmatter variable from the parent layout
     File.write!(tmp_dir <> "/layouts/c.eex", """
     ---
     layout: "b"
     ---
-    <h2>Elixir News</h2>
+    <h2><%= @language %> News</h2>
     <%= @content%>
     """)
 
@@ -230,11 +232,13 @@ defmodule Mix.Tasks.Grf.BuildTest do
     <%= @content%>
     """)
 
+    # lets reference a frontmatter variable from layouts `b` and from `e` itself
     File.write!(tmp_dir <> "/layouts/e.eex", """
     ---
     layout: "d"
+    latest_elixir: 1.18
     ---
-    <h4>Version 1.14</h4>
+    <h4><%= @language %> version <%= @latest_elixir %></h4>
     <%= @content%>
     """)
 
@@ -257,7 +261,7 @@ defmodule Mix.Tasks.Grf.BuildTest do
       assert file =~ "<h1>Griffin Times"
       assert file =~ "<h2>Elixir News"
       assert file =~ "<h3>Releases"
-      assert file =~ "<h4>Version 1.14"
+      assert file =~ "<h4>Elixir version 1.18"
       assert file =~ "Nesting layouts"
       assert file =~ "how to lose the joy of life in one simple feature"
     end)
