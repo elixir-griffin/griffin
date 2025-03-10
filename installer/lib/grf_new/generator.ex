@@ -54,7 +54,7 @@ defmodule Grf.New.Generator do
 
   defp eex_metadata(project) do
     [
-      griffin_dep: "{:griffin_ssg, \"~> 0.3\"}",
+      griffin_dep: "{:griffin_ssg, \"~> 0.4\"}",
       griffin_github_version_tag: @version,
       output_path: "_site",
       input_path: "src",

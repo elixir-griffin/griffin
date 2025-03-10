@@ -442,46 +442,7 @@ defmodule Mix.Tasks.Grf.Build do
 
   @doc false
   def parse_file(file, config) do
-    output_path = config.output
-    input_path = config.input
-
-    {:ok, %{front_matter: front_matter, content: content}} = GriffinSSG.parse_string(File.read!(file))
-
-    file_output_path =
-      if Map.has_key?(front_matter, :permalink) do
-        output_path <> "/" <> front_matter.permalink <> "/index.html"
-      else
-        Filesystem.output_filepath(file, input_path, output_path)
-      end
-
-    url =
-      file_output_path
-      |> String.trim_leading(output_path)
-      |> String.trim_trailing("index.html")
-
-    date =
-      Map.get_lazy(front_matter, :date, fn ->
-        timestamp = File.stat!(file, time: :posix).ctime
-
-        timestamp
-        |> DateTime.from_unix!()
-        |> DateTime.to_iso8601()
-      end)
-
-    %{
-      page: %{
-        url: url,
-        title: Map.get(front_matter, :title),
-        description: Map.get(front_matter, :description),
-        input_path: file,
-        output_path: file_output_path,
-        date: date
-      },
-      data: Map.put(front_matter, :url, url),
-      content: content,
-      input: file,
-      output: file_output_path
-    }
+    GriffinSSG.parse(file, config.input, config.output)
   end
 
   @doc false
@@ -490,7 +451,9 @@ defmodule Mix.Tasks.Grf.Build do
 
     layout_assigns =
       filters_assigns()
-      |> Map.put(:list_pages, &list_pages_with_cached_files/2)
+      |> Map.put(:list_pages, fn search_path, search_opts ->
+        list_pages_with_cached_files(search_path, opts.input, search_opts)
+      end)
       |> Map.merge(shortcodes_assigns())
       |> Map.merge(partials_assigns())
       |> Map.merge(opts.global_assigns)
@@ -543,7 +506,9 @@ defmodule Mix.Tasks.Grf.Build do
 
     layout_assigns =
       filters_assigns()
-      |> Map.put(:list_pages, &list_pages_with_cached_files/1)
+      |> Map.put(:list_pages, fn search_path, search_opts ->
+        list_pages_with_cached_files(search_path, opts.input, search_opts)
+      end)
       |> Map.merge(shortcodes_assigns())
       |> Map.merge(partials_assigns())
       |> Map.merge(opts.global_assigns)
@@ -849,11 +814,16 @@ defmodule Mix.Tasks.Grf.Build do
   defp pluralize(string, _), do: string <> "s"
 
   defp cache_parsed_files!(parsed_files) do
-    :ets.new(@parsed_files_table, [:set, :named_table])
+    try do
+      :ets.new(@parsed_files_table, [:ordered_set, :named_table, :public, {:read_concurrency, true}])
+    rescue
+      ArgumentError -> :ok
+    end
+
     :ets.insert(@parsed_files_table, {:parsed_files, parsed_files})
   end
 
-  defp list_pages_with_cached_files(directory, opts \\ []) do
-    GriffinSSG.list_pages(fetch_parsed_files(), directory, opts)
+  defp list_pages_with_cached_files(search_path, input_path, opts) do
+    GriffinSSG.list_pages(fetch_parsed_files(), Path.join(input_path, search_path), opts)
   end
 end

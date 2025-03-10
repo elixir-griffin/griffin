@@ -26,22 +26,49 @@ defmodule GriffinSSG do
 
   """
 
+  alias GriffinSSG.Filesystem
+
   @doc """
   Parses a file at the given path into two components: front matter and file content.
   """
-  def parse(path, opts \\ []) do
-    parsed_file_path =
-      case Keyword.get(opts, :from_root_directory) do
-        nil ->
-          path
+  def parse(file_path, input_path, output_path) do
+    {:ok, %{front_matter: front_matter, content: content}} = parse_string(File.read!(file_path))
 
-        root_directory ->
-          Path.relative_to(Path.expand(path), Path.expand(root_directory))
+    file_output_path =
+      if Map.has_key?(front_matter, :permalink) do
+        Path.join([output_path, front_matter.permalink, "index.html"])
+      else
+        Filesystem.output_filepath(file_path, input_path, output_path)
       end
 
-    path
-    |> File.read!()
-    |> parse_string(parsed_file_path)
+    url =
+      file_output_path
+      |> String.trim_leading(output_path)
+      |> String.trim_trailing("index.html")
+
+    date =
+      Map.get_lazy(front_matter, :date, fn ->
+        timestamp = File.stat!(file_path, time: :posix).ctime
+
+        timestamp
+        |> DateTime.from_unix!()
+        |> DateTime.to_iso8601()
+      end)
+
+    %{
+      page: %{
+        url: url,
+        title: Map.get(front_matter, :title),
+        description: Map.get(front_matter, :description),
+        input_path: file_path,
+        output_path: file_output_path,
+        date: date
+      },
+      data: Map.put(front_matter, :url, url),
+      content: content,
+      input: file_path,
+      output: file_output_path
+    }
   end
 
   @doc """
@@ -52,7 +79,7 @@ defmodule GriffinSSG do
 
   Returns `{:ok, map()}` where map contains both the front matter and file content.
   """
-  def parse_string(string_content, path \\ nil) do
+  def parse_string(string_content) do
     {front_matter, content} =
       case String.split(string_content, ~r/\n---\n/, parts: 2) do
         [content] ->
@@ -62,7 +89,7 @@ defmodule GriffinSSG do
           {parse_frontmatter(raw_frontmatter), content}
       end
 
-    {:ok, %{front_matter: front_matter, content: content, path: path}}
+    {:ok, %{front_matter: front_matter, content: content}}
   rescue
     MatchError ->
       {:error, :parsing_front_matter_failed}
@@ -124,7 +151,7 @@ defmodule GriffinSSG do
   def list_pages(parsed_files, directory, opts \\ []) do
     parsed_files
     |> Enum.filter(fn file ->
-      file_inside_directory?(file.path, directory)
+      file_inside_directory?(file.page.input_path, directory)
     end)
     # optional filter
     |> then(fn files ->
@@ -134,7 +161,7 @@ defmodule GriffinSSG do
 
         filter ->
           Enum.filter(files, fn file ->
-            filter.(file.front_matter)
+            filter.(file.data)
           end)
       end
     end)
@@ -175,7 +202,7 @@ defmodule GriffinSSG do
   end
 
   defp get_page_datetime(page) do
-    datetime = Map.get(page.front_matter, :date, "")
+    datetime = Map.get(page.data, :date, "")
 
     case DateTime.from_iso8601(datetime) do
       {:error, _} ->
