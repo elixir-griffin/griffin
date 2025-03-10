@@ -50,10 +50,10 @@ Here's what the terminal might look like after you've run this command:
 
 ```console
 ~/blog $ mix grf.build
-Wrote 0 files in 0.03 seconds (v0.4.0)
+Wrote 0 files in 0.03 seconds (v0.4.2)
 ```
 
-If you see `(v0.4.0)` that means you're running the latest version of Griffin. Note that Griffin didn't process any files -- this was expected, since we've not added templates yet.
+Check the printed version to ensure you're running the latest version. Note that Griffin didn't process any files -- this was expected, since we've not added templates yet.
 
 ### 4. Create some templates
 
@@ -86,7 +86,7 @@ The output may look like this:
 ~/blog $ mix grf.build
 Writing _site/README/index.html from ./README.md (earmark)
 Writing _site/index.html from ./index.md (earmark)
-Wrote 2 files in 0.06 seconds (v0.4.0)
+Wrote 2 files in 0.06 seconds (v0.4.2)
 ```
 
 We’ve compiled our two content templates in the current directory into the output folder (`_site` is the default).
