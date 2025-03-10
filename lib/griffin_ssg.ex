@@ -153,33 +153,9 @@ defmodule GriffinSSG do
     |> Enum.filter(fn file ->
       file_inside_directory?(file.page.input_path, directory)
     end)
-    # optional filter
-    |> then(fn files ->
-      case Keyword.get(opts, :filter) do
-        nil ->
-          files
-
-        filter ->
-          Enum.filter(files, fn file ->
-            filter.(file.data)
-          end)
-      end
-    end)
-    # optional sort
-    |> then(fn files ->
-      case Keyword.get(opts, :sort_by) do
-        nil ->
-          files
-
-        :date ->
-          # date sort defaults to descending order
-          sorter = {Keyword.get(opts, :sort_order, :desc), DateTime}
-          Enum.sort_by(files, &get_page_datetime/1, sorter)
-
-        sort ->
-          Enum.sort_by(files, sort, Keyword.get(opts, :sort_order, :asc))
-      end
-    end)
+    |> maybe_filter_files(Keyword.get(opts, :filter))
+    |> maybe_take_files(Keyword.get(opts, :take))
+    |> maybe_sort_files(opts)
   end
 
   defp parse_frontmatter(yaml) do
@@ -211,6 +187,30 @@ defmodule GriffinSSG do
 
       {:ok, datetime, _} ->
         datetime
+    end
+  end
+
+  defp maybe_filter_files(files, nil), do: files
+
+  defp maybe_filter_files(files, filter) when is_function(filter) do
+    Enum.filter(files, fn file -> filter.(file.data) end)
+  end
+
+  defp maybe_take_files(files, nil), do: files
+  defp maybe_take_files(files, amount) when is_integer(amount), do: Enum.take(files, amount)
+
+  defp maybe_sort_files(files, opts) do
+    case Keyword.get(opts, :sort_by) do
+      nil ->
+        files
+
+      :date ->
+        # date sort defaults to descending order
+        sorter = {Keyword.get(opts, :sort_order, :desc), DateTime}
+        Enum.sort_by(files, &get_page_datetime/1, sorter)
+
+      sort ->
+        Enum.sort_by(files, sort, Keyword.get(opts, :sort_order, :asc))
     end
   end
 end
