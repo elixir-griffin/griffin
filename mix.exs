@@ -1,7 +1,7 @@
 defmodule Griffin.MixProject do
   use Mix.Project
 
-  @version "0.4.2"
+  @version "0.4.3"
   @scm_url "https://github.com/elixir-griffin/griffin"
 
   def project do
@@ -67,7 +67,6 @@ defmodule Griffin.MixProject do
 
   defp docs do
     [
-      source_ref: "v#{@version}",
       main: "overview",
       logo: "logo.png",
       extra_section: "GUIDES",

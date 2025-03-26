@@ -1,5 +1,9 @@
 # Changelog for 0.4
 
+## 0.4.3
+
+- Fix reference from docs to source code.
+
 ## 0.4.2
 
 - Enable referencing frontmatter variables from parent layouts in child layouts
